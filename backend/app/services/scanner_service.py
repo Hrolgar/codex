@@ -59,17 +59,15 @@ async def _process_item(db, library: Library, item: ScannedItem) -> None:
     if existing.scalar_one_or_none():
         return
 
-    # Try to match to existing book by ISBN
+    # Try to match to existing book via duplicate service
+    from app.services.duplicate_service import check_duplicate
+
     book = None
-    if item.isbn:
-        from app.core.isbn import normalize
-        isbn_10, isbn_13 = normalize(item.isbn)
-        if isbn_13:
-            result = await db.execute(select(Book).where(Book.isbn_13 == isbn_13))
-            book = result.scalar_one_or_none()
-        if not book and isbn_10:
-            result = await db.execute(select(Book).where(Book.isbn_10 == isbn_10))
-            book = result.scalar_one_or_none()
+    is_dup, _confidence, matched_id = await check_duplicate(
+        db, title=item.title or "", author=item.author, isbn=item.isbn
+    )
+    if is_dup and matched_id:
+        book = await db.get(Book, matched_id)
 
     if not book:
         book = Book(
