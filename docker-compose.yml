@@ -1,0 +1,40 @@
+services:
+  codex:
+    build: .
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${BOOKS_DIR:-./books}:/books:ro
+      - ${DOWNLOAD_DIR:-./downloads}:/downloads
+      - codex-data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: codex
+      POSTGRES_USER: codex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - codex-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codex"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # redis:
+  #   image: redis:7-alpine
+  #   volumes:
+  #     - codex-redis:/data
+  #   restart: unless-stopped
+
+volumes:
+  codex-data:
+  codex-db:
+  # codex-redis:
