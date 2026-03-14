@@ -15,10 +15,18 @@ async def stats(db: AsyncSession = Depends(get_db)):
     books_count = await db.scalar(select(func.count(Book.id)))
     libraries_count = await db.scalar(select(func.count(Library.id)))
     items_count = await db.scalar(select(func.count(LibraryItem.id)))
+    ebooks_count = await db.scalar(
+        select(func.count(Book.id)).where(Book.media_type == "ebook")
+    )
+    audiobooks_count = await db.scalar(
+        select(func.count(Book.id)).where(Book.media_type == "audiobook")
+    )
     return {
         "books": books_count or 0,
         "libraries": libraries_count or 0,
         "library_items": items_count or 0,
+        "ebooks": ebooks_count or 0,
+        "audiobooks": audiobooks_count or 0,
     }
 
 

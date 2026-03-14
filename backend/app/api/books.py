@@ -15,14 +15,14 @@ async def list_books(
     q: str | None = Query(None, description="Search query"),
     media_type: str | None = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     svc = LibraryService(db)
-    items, total = await svc.search_books(
-        query=q, media_type=media_type, page=page, page_size=page_size
+    items, total = await svc.get_books(
+        query=q, media_type=media_type, page=page, per_page=per_page
     )
-    return BookListResponse(items=items, total=total, page=page, page_size=page_size)
+    return BookListResponse(items=items, total=total, page=page, per_page=per_page)
 
 
 @router.get("/{book_id}", response_model=BookResponse)

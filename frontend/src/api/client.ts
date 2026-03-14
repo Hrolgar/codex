@@ -38,10 +38,22 @@ export interface Library {
 }
 
 export interface SystemStats {
-  total_books: number;
-  total_libraries: number;
-  ebook_count: number;
-  audiobook_count: number;
+  books: number;
+  libraries: number;
+  library_items: number;
+}
+
+export interface SettingItem {
+  key: string;
+  label: string;
+  description: string;
+  is_secret: boolean;
+  value: string;
+}
+
+export interface SettingsCategory {
+  category: string;
+  settings: SettingItem[];
 }
 
 // API functions
@@ -94,4 +106,15 @@ export function scanLibrary(id: number) {
 
 export function getSystemStats() {
   return request<SystemStats>("/system/stats");
+}
+
+export function getSettings() {
+  return request<SettingsCategory[]>("/system/settings");
+}
+
+export function updateSettings(settings: Record<string, string>) {
+  return request<void>("/system/settings", {
+    method: "PUT",
+    body: JSON.stringify({ settings }),
+  });
 }

@@ -6,8 +6,79 @@ import {
   deleteLibrary,
   scanLibrary,
   getSystemStats,
+  getSettings,
+  updateSettings,
+  type SettingsCategory,
 } from "@/api/client";
-import { Plus, Trash2, RefreshCw, FolderOpen } from "lucide-react";
+import { Plus, Trash2, RefreshCw, FolderOpen, Save } from "lucide-react";
+
+function CategoryCard({ category }: { category: SettingsCategory }) {
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const s of category.settings) {
+      init[s.key] = s.value ?? "";
+    }
+    return init;
+  });
+  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () => updateSettings(values),
+    onSuccess: () => {
+      setToast({ type: "success", msg: "Settings saved" });
+      setTimeout(() => setToast(null), 3000);
+    },
+    onError: (err: Error) => {
+      setToast({ type: "error", msg: err.message });
+      setTimeout(() => setToast(null), 5000);
+    },
+  });
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
+      <h4 className="text-md font-semibold text-gray-100 capitalize mb-4">
+        {category.category}
+      </h4>
+      <div className="space-y-3">
+        {category.settings.map((setting) => (
+          <div key={setting.key}>
+            <label className="block text-xs text-gray-500 mb-1">
+              {setting.label}
+            </label>
+            {setting.description && (
+              <p className="text-xs text-gray-600 mb-1">{setting.description}</p>
+            )}
+            <input
+              type={setting.is_secret ? "password" : "text"}
+              value={values[setting.key] ?? ""}
+              onChange={(e) =>
+                setValues((prev) => ({ ...prev, [setting.key]: e.target.value }))
+              }
+              className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 mt-4">
+        <button
+          onClick={() => mutation.mutate()}
+          disabled={mutation.isPending}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          <Save size={14} />
+          Save
+        </button>
+        {toast && (
+          <span
+            className={`text-sm ${toast.type === "success" ? "text-green-400" : "text-red-400"}`}
+          >
+            {toast.msg}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -23,6 +94,11 @@ export default function SettingsPage() {
   const { data: stats } = useQuery({
     queryKey: ["stats"],
     queryFn: getSystemStats,
+  });
+
+  const { data: settingsCategories } = useQuery({
+    queryKey: ["settings"],
+    queryFn: getSettings,
   });
 
   const addMutation = useMutation({
@@ -58,12 +134,11 @@ export default function SettingsPage() {
 
       {/* System Stats */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {[
-            { label: "Libraries", value: stats.total_libraries },
-            { label: "Total Books", value: stats.total_books },
-            { label: "eBooks", value: stats.ebook_count },
-            { label: "Audiobooks", value: stats.audiobook_count },
+            { label: "Libraries", value: stats.libraries },
+            { label: "Books", value: stats.books },
+            { label: "Library Items", value: stats.library_items },
           ].map((s) => (
             <div
               key={s.label}
@@ -172,6 +247,20 @@ export default function SettingsPage() {
           Add Library
         </button>
       </form>
+
+      {/* Integrations */}
+      {settingsCategories && settingsCategories.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-200 mb-3">
+            Integrations
+          </h3>
+          <div className="space-y-4">
+            {settingsCategories.map((cat) => (
+              <CategoryCard key={cat.category} category={cat} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
