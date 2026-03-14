@@ -20,14 +20,20 @@ export interface AuthorListItem {
   name: string;
   sort_name: string | null;
   book_count: number;
+  monitored: boolean;
+  photo_url: string | null;
 }
 
 export interface AuthorDetail {
   id: string;
   name: string;
   sort_name: string | null;
-  series: { id: string; name: string; book_count: number }[];
-  standalone_books: BookListItem[];
+  monitored: boolean;
+  openlibrary_key: string | null;
+  bio: string | null;
+  photo_url: string | null;
+  series: { id: string; name: string; book_count: number; owned_count: number }[];
+  standalone_books: (BookListItem & { owned: boolean })[];
 }
 
 export interface SeriesListItem {
@@ -52,6 +58,7 @@ export interface BookListItem {
   cover_url: string | null;
   isbn_13: string | null;
   publish_year: number | null;
+  owned?: boolean;
 }
 
 export interface AuthorBrief {
@@ -143,6 +150,24 @@ export function getAuthors(search?: string) {
 
 export function getAuthor(id: string) {
   return request<AuthorDetail>(`/authors/${id}`);
+}
+
+export function addAuthor(name: string) {
+  return request<AuthorListItem>("/authors", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function refreshAuthor(id: string) {
+  return request<{ status: string }>(`/authors/${id}/refresh`, {
+    method: "POST",
+  });
+}
+
+export function deleteAuthor(id: string, removeBooks?: boolean) {
+  const query = removeBooks ? "?remove_books=true" : "";
+  return request<void>(`/authors/${id}${query}`, { method: "DELETE" });
 }
 
 export function getSeries(search?: string) {

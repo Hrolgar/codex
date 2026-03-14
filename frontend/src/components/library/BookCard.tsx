@@ -33,6 +33,15 @@ export default function BookCard({ book }: { book: BookListItem }) {
         >
           {isAudiobook ? "Audio" : "eBook"}
         </span>
+        {/* Owned indicator */}
+        {book.owned != null && (
+          <span
+            className={`absolute top-2 left-2 w-3 h-3 rounded-full border-2 border-gray-900 ${
+              book.owned ? "bg-green-400" : "bg-gray-500"
+            }`}
+            title={book.owned ? "In Library" : "Missing"}
+          />
+        )}
       </div>
 
       {/* Info */}
