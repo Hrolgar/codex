@@ -20,7 +20,7 @@ class DownloadResponse(BaseModel):
     id: uuid.UUID
     book_id: uuid.UUID | None
     source_type: str
-    source_url: str | None
+    source_url: str
     status: str
     progress: float
     error: str | None

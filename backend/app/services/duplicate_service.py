@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.matching import fuzzy_match, normalize_author, normalize_title
+from app.core.matching import escape_like, fuzzy_match, normalize_author, normalize_title
 from app.models import Author, Book, BookAuthor
 
 FUZZY_THRESHOLD = 85.0
@@ -36,7 +36,7 @@ async def check_duplicate(
     # Fetch candidate books (limit to reasonable set via ILIKE prefix)
     first_word = norm_title.split()[0] if norm_title else ""
     if first_word:
-        stmt = select(Book).where(Book.title.ilike(f"%{first_word}%"))
+        stmt = select(Book).where(Book.title.ilike(f"%{escape_like(first_word)}%"))
     else:
         return False, 0.0, None
 

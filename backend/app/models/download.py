@@ -14,7 +14,7 @@ class Download(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     book_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("books.id", ondelete="SET NULL"), index=True)
     source_type: Mapped[str] = mapped_column(String(50))
-    source_url: Mapped[str | None] = mapped_column(Text)
+    source_url: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | downloading | complete | error
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     error: Mapped[str | None] = mapped_column(Text)

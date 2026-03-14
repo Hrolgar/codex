@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.download import DownloadCreate, DownloadResponse
-from app.services.download_service import DownloadService
+from app.services.download_service import DownloadService, validate_download_url
 from app.ws.manager import manager
 
 router = APIRouter()
@@ -22,6 +22,7 @@ async def list_downloads(status: str | None = None, db: AsyncSession = Depends(g
 
 @router.post("", response_model=DownloadResponse, status_code=201)
 async def enqueue_download(body: DownloadCreate, db: AsyncSession = Depends(get_db)):
+    validate_download_url(body.source_url)
     svc = DownloadService(db)
     dl = await svc.enqueue(
         source_url=body.source_url,

@@ -2,12 +2,17 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
+import os
+import socket
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +26,45 @@ logger = logging.getLogger(__name__)
 
 # Throttle progress broadcasts to max once per 0.5s per download
 _PROGRESS_INTERVAL = 0.5
+
+# Private/internal IP networks that must be blocked for SSRF protection
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fd00::/8"),
+]
+
+
+def validate_download_url(url: str) -> None:
+    """Validate a download URL to prevent SSRF attacks."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Only http and https URLs are allowed")
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(status_code=400, detail="Invalid URL: no hostname")
+    try:
+        addrinfo = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        raise HTTPException(status_code=400, detail="Cannot resolve hostname")
+    for _family, _type, _proto, _canonname, sockaddr in addrinfo:
+        ip = ipaddress.ip_address(sockaddr[0])
+        for network in _BLOCKED_NETWORKS:
+            if ip in network:
+                raise HTTPException(status_code=400, detail="URLs pointing to internal/private networks are not allowed")
+
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitize a filename to prevent path traversal."""
+    return os.path.basename(filename.replace("\x00", ""))
+
+
+# Track active download tasks for cancellation
+_active_tasks: dict[uuid.UUID, asyncio.Task] = {}
 
 
 class DownloadService:
@@ -60,6 +104,10 @@ class DownloadService:
         if not dl:
             return False
         if dl.status == "downloading":
+            # Cancel the active asyncio task if running
+            task = _active_tasks.get(download_id)
+            if task and not task.done():
+                task.cancel()
             dl.status = "error"
             dl.error = "Cancelled by user"
         elif dl.status == "pending":
@@ -105,10 +153,20 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
     await db.commit()
     await _broadcast_progress(dl)
 
-    # Determine filename
-    filename = dl.target_path or dl.source_url.rsplit("/", 1)[-1] or f"{dl.id}"
+    # Determine filename — sanitize to prevent path traversal
+    raw_filename = dl.target_path or dl.source_url.rsplit("/", 1)[-1] or f"{dl.id}"
+    filename = sanitize_filename(raw_filename)
+    if not filename:
+        filename = str(dl.id)
     temp_path = temp_dir / f"{dl.id}_{filename}"
     final_path = download_dir / filename
+    # Verify resolved path is within download directory
+    if not str(final_path.resolve()).startswith(str(download_dir.resolve())):
+        dl.status = "error"
+        dl.error = "Invalid filename: path traversal detected"
+        await db.commit()
+        await _broadcast_progress(dl)
+        return
 
     last_broadcast = 0.0
 
@@ -171,7 +229,14 @@ async def process_download_queue() -> None:
                 result = await db.execute(stmt)
                 dl = result.scalar_one_or_none()
                 if dl:
-                    await _process_single(dl, db)
+                    task = asyncio.current_task()
+                    _active_tasks[dl.id] = task
+                    try:
+                        await _process_single(dl, db)
+                    except asyncio.CancelledError:
+                        logger.info("Download %s was cancelled", dl.id)
+                    finally:
+                        _active_tasks.pop(dl.id, None)
         except Exception:
             logger.exception("Error in download queue processor")
         await asyncio.sleep(2)

@@ -4,9 +4,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketException
 
 logger = logging.getLogger(__name__)
+
+MAX_CONNECTIONS = 50
 
 
 class ConnectionManager:
@@ -14,6 +16,9 @@ class ConnectionManager:
         self._connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket) -> None:
+        if len(self._connections) >= MAX_CONNECTIONS:
+            await websocket.close(code=1013, reason="Too many connections")
+            return
         await websocket.accept()
         self._connections.append(websocket)
 
