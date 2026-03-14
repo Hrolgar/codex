@@ -12,13 +12,13 @@ from app.services.scanner_service import run_scan
 router = APIRouter()
 
 
-@router.get("/", response_model=list[LibraryResponse])
+@router.get("", response_model=list[LibraryResponse])
 async def list_libraries(db: AsyncSession = Depends(get_db)):
     svc = LibraryService(db)
     return await svc.get_libraries()
 
 
-@router.post("/", response_model=LibraryResponse, status_code=201)
+@router.post("", response_model=LibraryResponse, status_code=201)
 async def create_library(data: LibraryCreate, db: AsyncSession = Depends(get_db)):
     svc = LibraryService(db)
     return await svc.create_library(

@@ -10,7 +10,7 @@ from app.services.library_service import LibraryService
 router = APIRouter()
 
 
-@router.get("/", response_model=BookListResponse)
+@router.get("", response_model=BookListResponse)
 async def list_books(
     search: str | None = Query(None, description="Search query"),
     media_type: str | None = Query(None),
