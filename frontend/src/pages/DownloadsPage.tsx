@@ -217,7 +217,7 @@ function DownloadItem({
             <span>{status.label}</span>
             {download.status === "downloading" && (
               <span className="text-gray-500 ml-1">
-                {Math.round(download.progress)}%
+                {Math.round(download.progress * 100)}%
               </span>
             )}
           </div>
@@ -227,7 +227,7 @@ function DownloadItem({
             <div className="mt-2 h-1.5 rounded-full bg-gray-800 overflow-hidden">
               <div
                 className="h-full rounded-full bg-indigo-500 transition-all duration-300"
-                style={{ width: `${download.progress}%` }}
+                style={{ width: `${download.progress * 100}%` }}
               />
             </div>
           )}

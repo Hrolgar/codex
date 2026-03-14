@@ -44,7 +44,7 @@ export function useDownloadProgress() {
       };
 
       ws.onerror = () => {
-        ws.close();
+        try { ws.close(); } catch { /* already closed */ }
       };
     }
 
@@ -52,7 +52,7 @@ export function useDownloadProgress() {
 
     return () => {
       clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
+      try { wsRef.current?.close(); } catch { /* already closed */ }
       wsRef.current = null;
     };
   }, [queryClient]);

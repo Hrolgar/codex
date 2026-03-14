@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { searchExternal, createDownload } from "@/api/client";
 import type { SearchResult } from "@/api/client";
@@ -20,16 +20,13 @@ export default function SearchPage() {
   );
   const queryClient = useQueryClient();
 
-  // Debounce via cleanup stored in state
-  const [, setCleanup] = useState<(() => void) | null>(null);
+  // Debounce via ref to avoid re-renders on every keystroke
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const onSearchChange = useCallback(
     (value: string) => {
       setSearch(value);
-      setCleanup((prev) => {
-        prev?.();
-        const timer = setTimeout(() => setDebouncedSearch(value), 300);
-        return () => clearTimeout(timer);
-      });
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setDebouncedSearch(value), 300);
     },
     []
   );
