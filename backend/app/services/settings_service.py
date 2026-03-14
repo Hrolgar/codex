@@ -21,8 +21,8 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     "download.temp_dir": ("Temp Directory", "Temporary directory for in-progress downloads", "downloads", False),
 
     # Metadata
-    "metadata.openlibrary_enabled": ("OpenLibrary", "Use OpenLibrary for metadata enrichment", "metadata", False),
-    "metadata.google_books_enabled": ("Google Books", "Use Google Books for metadata enrichment", "metadata", False),
+    "metadata.hardcover_api_key": ("Hardcover API Key", "API key for Hardcover metadata provider", "metadata", True),
+    "metadata.google_books_api_key": ("Google Books API Key", "API key for Google Books metadata provider", "metadata", True),
 }
 
 

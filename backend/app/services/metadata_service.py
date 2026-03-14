@@ -3,10 +3,12 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.metadata.base import MetadataResult
+from app.metadata.google_books import GoogleBooksProvider
+from app.metadata.hardcover import HardcoverProvider
 from app.metadata.openlibrary import OpenLibraryProvider
 from app.models import Author, Book, BookAuthor
+from app.services.settings_service import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +16,26 @@ logger = logging.getLogger(__name__)
 class MetadataService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self._providers_built = False
         self.providers = []
-        if settings.openlibrary_enabled:
-            self.providers.append(OpenLibraryProvider())
+
+    async def _build_providers(self) -> None:
+        if self._providers_built:
+            return
+        self._providers_built = True
+
+        hardcover_key = await get_setting(self.db, "metadata.hardcover_api_key")
+        if hardcover_key:
+            self.providers.append(HardcoverProvider(api_key=hardcover_key))
+
+        self.providers.append(OpenLibraryProvider())
+
+        google_key = await get_setting(self.db, "metadata.google_books_api_key")
+        self.providers.append(GoogleBooksProvider(api_key=google_key))
 
     async def enrich_book(self, book: Book) -> bool:
         """Try to fill in missing metadata from providers. Returns True if updated."""
+        await self._build_providers()
         result = None
 
         for provider in self.providers:

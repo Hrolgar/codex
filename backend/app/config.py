@@ -14,8 +14,6 @@ class Settings(BaseSettings):
     audiobookshelf_url: str = ""
     audiobookshelf_api_key: str = ""
 
-    openlibrary_enabled: bool = True
-
     download_dir: Path = Path("/data/codex/downloads")
     temp_dir: Path = Path("/tmp/codex")
 
