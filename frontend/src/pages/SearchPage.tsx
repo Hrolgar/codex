@@ -21,7 +21,7 @@ export default function SearchPage() {
   const queryClient = useQueryClient();
 
   // Debounce via ref to avoid re-renders on every keystroke
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const onSearchChange = useCallback(
     (value: string) => {
       setSearch(value);
