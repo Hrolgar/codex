@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Author, Book, BookAuthor, Library, LibraryItem, Series, SeriesBook
-from app.schemas.book import AuthorBrief, BookResponse, LibraryItemBrief, SeriesBrief
+from app.schemas.book import AuthorBrief, BookListItem, BookResponse, LibraryItemBrief, SeriesBrief
 
 
 class LibraryService:
@@ -66,31 +66,61 @@ class LibraryService:
         query: str | None = None,
         media_type: str | None = None,
         page: int = 1,
-        per_page: int = 20,
-    ) -> tuple[list[BookResponse], int]:
-        stmt = select(Book)
-        count_stmt = select(func.count(Book.id))
-
+        per_page: int = 24,
+    ) -> tuple[list[BookListItem], int]:
+        # Build filter conditions
+        conditions = []
         if query:
-            pattern = f"%{query}%"
-            stmt = stmt.where(Book.title.ilike(pattern))
-            count_stmt = count_stmt.where(Book.title.ilike(pattern))
-
+            conditions.append(Book.title.ilike(f"%{query}%"))
         if media_type:
-            stmt = stmt.where(Book.media_type == media_type)
-            count_stmt = count_stmt.where(Book.media_type == media_type)
+            conditions.append(Book.media_type == media_type)
 
+        # Count query
+        count_stmt = select(func.count(Book.id))
+        for cond in conditions:
+            count_stmt = count_stmt.where(cond)
         total = await self.db.scalar(count_stmt) or 0
 
-        stmt = stmt.order_by(Book.title).offset((page - 1) * per_page).limit(per_page)
-        result = await self.db.execute(stmt)
-        books = result.scalars().all()
+        # Main query with author join
+        first_author = (
+            select(Author.name)
+            .join(BookAuthor, Author.id == BookAuthor.author_id)
+            .where(BookAuthor.book_id == Book.id)
+            .correlate(Book)
+            .limit(1)
+            .scalar_subquery()
+            .label("author")
+        )
 
-        items = []
-        for book in books:
-            authors = await self._get_book_authors(book.id)
-            series = await self._get_book_series(book.id)
-            items.append(BookResponse.model_validate(book, update={"authors": authors, "series": series}))
+        stmt = select(
+            Book.id,
+            Book.title,
+            first_author,
+            Book.media_type,
+            Book.cover_url,
+            Book.isbn_13,
+            Book.publish_year,
+        )
+        for cond in conditions:
+            stmt = stmt.where(cond)
+
+        offset = (page - 1) * per_page
+        stmt = stmt.order_by(Book.title).offset(offset).limit(per_page)
+        result = await self.db.execute(stmt)
+        rows = result.all()
+
+        items = [
+            BookListItem(
+                id=row.id,
+                title=row.title,
+                author=row.author,
+                media_type=row.media_type,
+                cover_url=row.cover_url,
+                isbn_13=row.isbn_13,
+                publish_year=row.publish_year,
+            )
+            for row in rows
+        ]
 
         return items, total
 

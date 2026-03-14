@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas import BookListResponse, BookResponse
+from app.schemas import BookListItem, BookListResponse, BookResponse
 from app.services.library_service import LibraryService
 
 router = APIRouter()
@@ -12,15 +12,15 @@ router = APIRouter()
 
 @router.get("/", response_model=BookListResponse)
 async def list_books(
-    q: str | None = Query(None, description="Search query"),
+    search: str | None = Query(None, description="Search query"),
     media_type: str | None = Query(None),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(24, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     svc = LibraryService(db)
     items, total = await svc.get_books(
-        query=q, media_type=media_type, page=page, per_page=per_page
+        query=search, media_type=media_type, page=page, per_page=per_page
     )
     return BookListResponse(items=items, total=total, page=page, per_page=per_page)
 

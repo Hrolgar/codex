@@ -66,8 +66,20 @@ class BookResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BookListItem(BaseModel):
+    id: uuid.UUID
+    title: str
+    author: str | None = None
+    media_type: str
+    cover_url: str | None = None
+    isbn_13: str | None = None
+    publish_year: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class BookListResponse(BaseModel):
-    items: list[BookResponse]
+    items: list[BookListItem]
     total: int
     page: int
     per_page: int
