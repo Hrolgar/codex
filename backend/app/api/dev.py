@@ -3,9 +3,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Book, Author, BookAuthor, Library, LibraryItem
+from app.models import Book, Author, BookAuthor, Library, LibraryItem, Series, SeriesBook
 from app.metadata.openlibrary import get_cover_url
-from app.services.entity_service import get_or_create_author, link_book_author
+from app.services.entity_service import (
+    get_or_create_author,
+    get_or_create_series,
+    link_book_author,
+    link_book_series,
+)
 
 router = APIRouter()
 
@@ -35,6 +40,12 @@ async def seed(db: AsyncSession = Depends(get_db)):
         ("Ready Player One", "Ernest Cline", "audiobook", 2011, "9780307887443"),
     ]
 
+    # Series definitions: (series_name, [(book_title, position)])
+    series_data = [
+        ("Mistborn", [("Mistborn", 1.0)]),
+        ("The Stormlight Archive", [("The Way of Kings", 1.0)]),
+    ]
+
     created = 0
     for title, author_name, media_type, year, isbn in books_data:
         # Skip if book with this ISBN already exists
@@ -47,6 +58,7 @@ async def seed(db: AsyncSession = Depends(get_db)):
         await db.flush()
 
         author = await get_or_create_author(db, author_name)
+        author.monitored = True
         await link_book_author(db, book.id, author.id, role="author")
 
         db.add(LibraryItem(
@@ -58,13 +70,22 @@ async def seed(db: AsyncSession = Depends(get_db)):
         ))
         created += 1
 
+    # Create series and link books
+    for series_name, book_positions in series_data:
+        series = await get_or_create_series(db, series_name)
+        for book_title, position in book_positions:
+            book_result = await db.execute(select(Book).where(Book.title == book_title))
+            book = book_result.scalar_one_or_none()
+            if book:
+                await link_book_series(db, book.id, series.id, position=position)
+
     await db.commit()
     return {"status": "ok", "books_created": created}
 
 
 @router.post("/clear")
 async def clear(db: AsyncSession = Depends(get_db)):
-    for model in [LibraryItem, BookAuthor, Book, Author, Library]:
+    for model in [LibraryItem, SeriesBook, BookAuthor, Book, Series, Author, Library]:
         await db.execute(model.__table__.delete())
     await db.commit()
     return {"status": "cleared"}
