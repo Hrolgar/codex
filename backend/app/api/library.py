@@ -22,7 +22,7 @@ async def list_libraries(db: AsyncSession = Depends(get_db)):
 async def create_library(data: LibraryCreate, db: AsyncSession = Depends(get_db)):
     svc = LibraryService(db)
     return await svc.create_library(
-        name=data.name, scanner_type=data.scanner_type, config=data.config
+        name=data.name, scanner_type=data.scanner_type, config=data.to_config()
     )
 
 

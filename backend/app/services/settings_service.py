@@ -23,6 +23,9 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     # Metadata
     "metadata.hardcover_api_key": ("Hardcover API Key", "API key for Hardcover metadata provider", "metadata", True),
     "metadata.google_books_api_key": ("Google Books API Key", "API key for Google Books metadata provider", "metadata", True),
+
+    # General
+    "general.languages": ("Languages", "Comma-separated language codes to include (e.g. en,no). Leave empty for all.", "general", False),
 }
 
 

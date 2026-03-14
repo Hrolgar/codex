@@ -17,8 +17,60 @@ from app.services.entity_service import (
     link_book_series,
 )
 from app.services.metadata_service import MetadataService
+from app.services.settings_service import get_setting
 
 logger = logging.getLogger(__name__)
+
+# Map common 2-letter language codes to OpenLibrary 3-letter codes
+_LANG_CODE_MAP: dict[str, str] = {
+    "en": "eng", "no": "nor", "de": "ger", "fr": "fre", "es": "spa",
+    "it": "ita", "pt": "por", "nl": "dut", "sv": "swe", "da": "dan",
+    "fi": "fin", "ru": "rus", "pl": "pol", "ja": "jpn", "zh": "chi",
+    "ko": "kor", "ar": "ara", "he": "heb", "hi": "hin", "cs": "cze",
+}
+
+
+def _parse_language_codes(raw: str | None) -> set[str] | None:
+    """Parse the general.languages setting into a set of OL 3-letter codes.
+
+    Returns None if no filtering should be applied.
+    """
+    if not raw or not raw.strip():
+        return None
+    codes: set[str] = set()
+    for part in raw.split(","):
+        part = part.strip().lower()
+        if not part:
+            continue
+        # Map 2-letter to 3-letter, or keep as-is if already 3-letter / unknown
+        codes.add(_LANG_CODE_MAP.get(part, part))
+    return codes if codes else None
+
+
+def _work_matches_language(entry: dict, editions: list[dict], allowed: set[str]) -> bool:
+    """Check if a work or any of its editions match the allowed languages."""
+    # Check work-level language field
+    work_langs = entry.get("language", [])
+    if isinstance(work_langs, list):
+        for lang in work_langs:
+            code = lang.split("/")[-1] if isinstance(lang, str) else ""
+            if code in allowed:
+                return True
+
+    # Check edition languages
+    for ed in editions:
+        ed_langs = ed.get("languages", [])
+        for lang in ed_langs:
+            key = lang.get("key", "") if isinstance(lang, dict) else str(lang)
+            code = key.split("/")[-1]
+            if code in allowed:
+                return True
+
+    # If no language info at all, include the work (don't filter unknowns)
+    if not work_langs and not any(ed.get("languages") for ed in editions):
+        return True
+
+    return False
 
 OL_BASE = "https://openlibrary.org"
 OL_COVERS = "https://covers.openlibrary.org"
@@ -133,6 +185,10 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
     if not author.openlibrary_key:
         return 0
 
+    # Read language filter setting
+    lang_raw = await get_setting(db, "general.languages")
+    allowed_languages = _parse_language_codes(lang_raw)
+
     added = 0
     async with httpx.AsyncClient(timeout=15) as client:
         # Fetch all works
@@ -182,6 +238,12 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                 editions_data = await _ol_get(
                     client, f"/works/{work_key_short}/editions.json", params={"limit": 50}
                 )
+
+                # Apply language filter before detailed processing
+                edition_entries = editions_data.get("entries", []) if editions_data else []
+                if allowed_languages and not _work_matches_language(entry, edition_entries, allowed_languages):
+                    logger.debug("Skipping work %s — language not in allowed list", work_title)
+                    continue
 
                 isbn_13 = None
                 isbn_10 = None
