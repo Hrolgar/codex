@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getBooks } from "@/api/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getBooks, seedDemoData } from "@/api/client";
 import BookGrid from "@/components/library/BookGrid";
 import SearchBar from "@/components/library/SearchBar";
 
 export default function LibraryPage() {
+  const queryClient = useQueryClient();
+  const seedMutation = useMutation({ mutationFn: seedDemoData, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['books'] }) });
   const [search, setSearch] = useState("");
   const [mediaType, setMediaType] = useState("");
 
@@ -19,7 +21,16 @@ export default function LibraryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-100">Library</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-100">Library</h2>
+          <button
+            onClick={() => seedMutation.mutate()}
+            disabled={seedMutation.isPending}
+            className="bg-indigo-500 hover:bg-indigo-600 text-white rounded px-3 py-1.5 text-sm"
+          >
+            {seedMutation.isPending ? 'Seeding...' : 'Seed Demo Data'}
+          </button>
+        </div>
         <p className="text-sm text-gray-500 mt-1">
           {data ? `${data.total} books` : "Loading..."}
         </p>
