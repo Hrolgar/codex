@@ -1,4 +1,5 @@
 import type { BookListItem } from "@/api/client";
+import { SearchX } from "lucide-react";
 import BookCard from "./BookCard";
 
 interface BookGridProps {
@@ -11,7 +12,10 @@ export default function BookGrid({ books, isLoading }: BookGridProps) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {Array.from({ length: 12 }).map((_, i) => (
-          <div key={i} className="bg-gray-900 rounded-lg overflow-hidden border border-gray-800 animate-pulse">
+          <div
+            key={i}
+            className="bg-gray-900 rounded-lg overflow-hidden border border-gray-800 animate-pulse"
+          >
             <div className="aspect-[2/3] bg-gray-800" />
             <div className="p-3 space-y-2">
               <div className="h-3 bg-gray-800 rounded w-3/4" />
@@ -25,9 +29,12 @@ export default function BookGrid({ books, isLoading }: BookGridProps) {
 
   if (books.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-500">
-        <p className="text-lg">No books found</p>
-        <p className="text-sm mt-1">Add a library in Settings to get started</p>
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <SearchX size={32} className="text-gray-700 mb-3" />
+        <p className="text-gray-400">No books found</p>
+        <p className="text-sm text-gray-600 mt-1">
+          Try adjusting your search or filters
+        </p>
       </div>
     );
   }
