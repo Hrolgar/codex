@@ -3,6 +3,14 @@ import httpx
 from app.metadata.base import MetadataResult
 
 BASE_URL = "https://openlibrary.org"
+COVERS_BASE_URL = "https://covers.openlibrary.org"
+
+
+def get_cover_url(isbn: str) -> str | None:
+    """Return the OpenLibrary large-cover URL for an ISBN, or None if blank."""
+    if not isbn:
+        return None
+    return f"{COVERS_BASE_URL}/b/isbn/{isbn}-L.jpg"
 
 
 class OpenLibraryProvider:

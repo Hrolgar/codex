@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from app.database import get_db
 from app.models import Book, Author, BookAuthor, Library, LibraryItem
+from app.metadata.openlibrary import get_cover_url
 
 router = APIRouter()
 
@@ -31,7 +32,7 @@ async def seed(db: AsyncSession = Depends(get_db)):
     ]
 
     for title, author_name, media_type, year, isbn in books_data:
-        book = Book(title=title, media_type=media_type, publish_year=year, isbn_13=isbn)
+        book = Book(title=title, media_type=media_type, publish_year=year, isbn_13=isbn, cover_url=get_cover_url(isbn))
         db.add(book)
         await db.flush()
 
