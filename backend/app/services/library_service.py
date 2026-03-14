@@ -3,13 +3,52 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Author, Book, BookAuthor, Library, Series, SeriesBook
+from app.models import Author, Book, BookAuthor, Library, LibraryItem, Series, SeriesBook
 from app.schemas.book import AuthorBrief, BookResponse, SeriesBrief
 
 
 class LibraryService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    # ── Library CRUD ──────────────────────────────────────────────
+
+    async def get_libraries(self) -> list[Library]:
+        result = await self.db.execute(select(Library).order_by(Library.name))
+        return list(result.scalars().all())
+
+    async def create_library(
+        self, name: str, scanner_type: str, config: dict | None = None
+    ) -> Library:
+        library = Library(name=name, scanner_type=scanner_type, config=config)
+        self.db.add(library)
+        await self.db.commit()
+        await self.db.refresh(library)
+        return library
+
+    async def delete_library(self, library_id: uuid.UUID) -> bool:
+        library = await self.db.get(Library, library_id)
+        if not library:
+            return False
+        await self.db.delete(library)
+        await self.db.commit()
+        return True
+
+    # ── Stats ─────────────────────────────────────────────────────
+
+    async def get_library_stats(self) -> dict:
+        book_count = await self.db.scalar(select(func.count(Book.id))) or 0
+        author_count = await self.db.scalar(select(func.count(Author.id))) or 0
+        library_count = await self.db.scalar(select(func.count(Library.id))) or 0
+        item_count = await self.db.scalar(select(func.count(LibraryItem.id))) or 0
+        return {
+            "books": book_count,
+            "authors": author_count,
+            "libraries": library_count,
+            "library_items": item_count,
+        }
+
+    # ── Book queries ──────────────────────────────────────────────
 
     async def get_book(self, book_id: uuid.UUID) -> BookResponse | None:
         book = await self.db.get(Book, book_id)

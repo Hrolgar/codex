@@ -1,9 +1,14 @@
+import logging
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.metadata.base import MetadataResult
 from app.metadata.openlibrary import OpenLibraryProvider
 from app.models import Author, Book, BookAuthor
+
+logger = logging.getLogger(__name__)
 
 
 class MetadataService:
@@ -76,3 +81,18 @@ class MetadataService:
             )
             if not existing.scalar_one_or_none():
                 self.db.add(BookAuthor(book_id=book.id, author_id=author.id, role="author"))
+
+    async def enrich_unmatched(self) -> int:
+        """Find books without metadata_source and try to enrich them. Returns count of enriched."""
+        stmt = select(Book).where(Book.metadata_source.is_(None))
+        result = await self.db.execute(stmt)
+        books = result.scalars().all()
+
+        enriched = 0
+        for book in books:
+            try:
+                if await self.enrich_book(book):
+                    enriched += 1
+            except Exception:
+                logger.warning("Failed to enrich book %s (%s)", book.id, book.title)
+        return enriched
