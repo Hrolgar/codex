@@ -10,7 +10,7 @@ import {
   updateSettings,
   type SettingsCategory,
 } from "@/api/client";
-import { Plus, Trash2, RefreshCw, FolderOpen, Save } from "lucide-react";
+import { Plus, Trash2, RefreshCw, FolderOpen } from "lucide-react";
 
 function IntegrationCategory({ category }: { category: SettingsCategory }) {
   const queryClient = useQueryClient();
