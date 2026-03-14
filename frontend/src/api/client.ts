@@ -116,7 +116,9 @@ export interface Library {
   id: string;
   name: string;
   scanner_type: string;
-  config: Record<string, unknown>;
+  path?: string;
+  url?: string;
+  api_key?: string;
 }
 
 export interface SystemStats {
@@ -206,7 +208,9 @@ export function getLibraries() {
 export function createLibrary(body: {
   name: string;
   scanner_type: string;
-  config: Record<string, unknown>;
+  path?: string;
+  url?: string;
+  api_key?: string;
 }) {
   return request<Library>("/libraries", {
     method: "POST",

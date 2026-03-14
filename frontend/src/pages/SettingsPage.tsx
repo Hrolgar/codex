@@ -68,8 +68,10 @@ function IntegrationCategory({ category }: { category: SettingsCategory }) {
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [scannerType, setScannerType] = useState("ebook");
-  const [configJson, setConfigJson] = useState('{"path": ""}');
+  const [scannerType, setScannerType] = useState("filesystem");
+  const [path, setPath] = useState("");
+  const [url, setUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
 
   const { data: libraries } = useQuery({
     queryKey: ["libraries"],
@@ -91,7 +93,9 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["libraries"] });
       setName("");
-      setConfigJson('{"path": ""}');
+      setPath("");
+      setUrl("");
+      setApiKey("");
     },
   });
 
@@ -103,13 +107,18 @@ export default function SettingsPage() {
 
   const scanMutation = useMutation({ mutationFn: scanLibrary });
 
+  const isFormValid =
+    name.trim() !== "" &&
+    (scannerType === "filesystem"
+      ? path.trim() !== ""
+      : url.trim() !== "" && apiKey.trim() !== "");
+
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    try {
-      const config = JSON.parse(configJson);
-      addMutation.mutate({ name, scanner_type: scannerType, config });
-    } catch {
-      alert("Invalid JSON in config field");
+    if (scannerType === "filesystem") {
+      addMutation.mutate({ name, scanner_type: scannerType, path });
+    } else {
+      addMutation.mutate({ name, scanner_type: scannerType, url, api_key: apiKey });
     }
   }
 
@@ -189,6 +198,19 @@ export default function SettingsPage() {
         <h3 className="text-lg font-semibold text-gray-200">Add Library</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Scanner Type
+            </label>
+            <select
+              value={scannerType}
+              onChange={(e) => setScannerType(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="filesystem">Filesystem</option>
+              <option value="audiobookshelf">Audiobookshelf</option>
+            </select>
+          </div>
+          <div>
             <label className="block text-xs text-gray-500 mb-1">Name</label>
             <input
               type="text"
@@ -198,34 +220,50 @@ export default function SettingsPage() {
               className="w-full px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
             />
           </div>
+        </div>
+        {scannerType === "filesystem" && (
           <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Scanner Type
-            </label>
-            <select
-              value={scannerType}
-              onChange={(e) => setScannerType(e.target.value)}
+            <label className="block text-xs text-gray-500 mb-1">Path</label>
+            <input
+              type="text"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="/path/to/books"
+              required
               className="w-full px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ebook">eBook</option>
-              <option value="audiobook">Audiobook</option>
-            </select>
+            />
           </div>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">
-            Config (JSON)
-          </label>
-          <textarea
-            value={configJson}
-            onChange={(e) => setConfigJson(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 font-mono focus:outline-none focus:border-indigo-500"
-          />
-        </div>
+        )}
+        {scannerType === "audiobookshelf" && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">URL</label>
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="http://audiobookshelf.local:13378"
+                required
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                API Key
+              </label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                required
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+        )}
         <button
           type="submit"
-          disabled={addMutation.isPending}
+          disabled={addMutation.isPending || !isFormValid}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
         >
           <Plus size={16} />
