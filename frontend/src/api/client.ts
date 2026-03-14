@@ -118,3 +118,11 @@ export function updateSettings(settings: Record<string, string>) {
     body: JSON.stringify({ settings }),
   });
 }
+
+export function seedDemoData() {
+  return request<{ status: string }>("/dev/seed", { method: "POST" });
+}
+
+export function clearDemoData() {
+  return request<{ status: string }>("/dev/clear", { method: "POST" });
+}
