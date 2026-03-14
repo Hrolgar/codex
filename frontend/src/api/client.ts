@@ -12,6 +12,35 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 // Types
+export interface AuthorListItem {
+  id: string;
+  name: string;
+  sort_name: string | null;
+  book_count: number;
+}
+
+export interface AuthorDetail {
+  id: string;
+  name: string;
+  sort_name: string | null;
+  series: { id: string; name: string; book_count: number }[];
+  standalone_books: BookListItem[];
+}
+
+export interface SeriesListItem {
+  id: string;
+  name: string;
+  book_count: number;
+  author_names: string;
+}
+
+export interface SeriesDetail {
+  id: string;
+  name: string;
+  books: (BookListItem & { position: number | null })[];
+  authors: { id: string; name: string }[];
+}
+
 export interface BookListItem {
   id: string;
   title: string;
@@ -101,6 +130,26 @@ export interface SettingsCategory {
 // API functions
 export function getHealth() {
   return request<{ status: string }>("/health");
+}
+
+export function getAuthors(search?: string) {
+  const query = new URLSearchParams();
+  if (search) query.set("search", search);
+  return request<AuthorListItem[]>(`/authors?${query}`);
+}
+
+export function getAuthor(id: string) {
+  return request<AuthorDetail>(`/authors/${id}`);
+}
+
+export function getSeries(search?: string) {
+  const query = new URLSearchParams();
+  if (search) query.set("search", search);
+  return request<SeriesListItem[]>(`/series?${query}`);
+}
+
+export function getSeriesDetail(id: string) {
+  return request<SeriesDetail>(`/series/${id}`);
 }
 
 export function getBooks(params: {

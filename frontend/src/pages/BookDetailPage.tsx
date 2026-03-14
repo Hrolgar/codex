@@ -37,8 +37,8 @@ export default function BookDetailPage() {
     return (
       <div className="text-center py-16">
         <p className="text-gray-400 text-lg">Book not found</p>
-        <Link to="/" className="text-indigo-400 hover:text-indigo-300 text-sm mt-2 inline-block">
-          Back to library
+        <Link to="/books" className="text-indigo-400 hover:text-indigo-300 text-sm mt-2 inline-block">
+          Back to books
         </Link>
       </div>
     );
@@ -48,9 +48,9 @@ export default function BookDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors">
+      <Link to="/books" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors">
         <ArrowLeft size={16} />
-        Back to library
+        Back to books
       </Link>
 
       <div className="flex flex-col md:flex-row gap-8">

@@ -1,9 +1,10 @@
 import { ReactNode, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Library, Search, Download, Settings, Menu, X, BookOpen } from "lucide-react";
+import { User, BookOpen as BookIcon, Search, Download, Settings, Menu, X, BookOpen } from "lucide-react";
 
 const navItems = [
-  { to: "/", icon: Library, label: "Library" },
+  { to: "/", icon: User, label: "Authors" },
+  { to: "/books", icon: BookIcon, label: "All Books" },
   { to: "/search", icon: Search, label: "Search" },
   { to: "/downloads", icon: Download, label: "Downloads" },
   { to: "/settings", icon: Settings, label: "Settings" },
@@ -45,7 +46,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <NavLink
               key={to}
               to={to}
-              end={to === "/"}
+              end={to === "/" || to === "/books"}
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
