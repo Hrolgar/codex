@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.matching import escape_like
 from app.database import get_db
 from app.models import Author, Book, BookAuthor, Series, SeriesBook
 from app.schemas.series import SeriesAuthor, SeriesBookItem, SeriesDetail, SeriesListItem
@@ -39,7 +40,7 @@ async def list_series(
     )
 
     if search:
-        stmt = stmt.where(Series.name.ilike(f"%{search}%"))
+        stmt = stmt.where(Series.name.ilike(f"%{escape_like(search)}%"))
 
     stmt = stmt.order_by(Series.name)
 

@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.matching import escape_like
 from app.models import Author, Book, BookAuthor, Library, LibraryItem, Series, SeriesBook
 from app.schemas.book import AuthorBrief, BookListItem, BookResponse, LibraryItemBrief, SeriesBrief
 
@@ -73,7 +74,7 @@ class LibraryService:
         # Build filter conditions
         conditions = []
         if query:
-            conditions.append(Book.title.ilike(f"%{query}%"))
+            conditions.append(Book.title.ilike(f"%{escape_like(query)}%"))
         if media_type:
             conditions.append(Book.media_type == media_type)
         if author_id:

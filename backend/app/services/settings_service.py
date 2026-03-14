@@ -42,6 +42,8 @@ async def get_setting(db: AsyncSession, key: str) -> str | None:
 
 async def set_setting(db: AsyncSession, key: str, value: str) -> None:
     """Set a single setting value (upsert)."""
+    if key not in SETTINGS_SCHEMA:
+        raise ValueError(f"Unknown setting key: {key}")
     result = await db.execute(select(AppSetting).where(AppSetting.key == key))
     existing = result.scalar_one_or_none()
     if existing:

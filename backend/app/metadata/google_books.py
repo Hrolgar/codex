@@ -61,7 +61,7 @@ class GoogleBooksProvider:
             parts = [f"intitle:{title}"]
             if author:
                 parts.append(f"inauthor:{author}")
-            q = "+".join(parts)
+            q = " ".join(parts)
 
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(BASE_URL, params=self._params(q))
