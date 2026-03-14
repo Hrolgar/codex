@@ -1,9 +1,9 @@
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
@@ -39,6 +39,14 @@ async def health():
     return {"status": "ok"}
 
 
-# Serve frontend static files (mounted after API routes so /api/* takes priority)
+# Serve frontend: static assets at their real paths, SPA fallback for client-side routes
 if STATIC_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(request: Request, full_path: str):
+        """Serve index.html for all non-API routes (SPA client-side routing)."""
+        file_path = STATIC_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(STATIC_DIR / "index.html")

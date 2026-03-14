@@ -58,9 +58,29 @@ class LibraryService:
         authors = await self._get_book_authors(book_id)
         series = await self._get_book_series(book_id)
         library_items = await self._get_book_library_items(book_id)
-        return BookResponse.model_validate(
-            book, update={"authors": authors, "series": series, "library_items": library_items}
-        )
+        data = {
+            "id": book.id,
+            "title": book.title,
+            "subtitle": book.subtitle,
+            "description": book.description,
+            "cover_url": book.cover_url,
+            "media_type": book.media_type,
+            "language": book.language,
+            "publish_year": book.publish_year,
+            "page_count": book.page_count,
+            "duration_seconds": book.duration_seconds,
+            "isbn_10": book.isbn_10,
+            "isbn_13": book.isbn_13,
+            "asin": book.asin,
+            "openlibrary_key": book.openlibrary_key,
+            "metadata_source": book.metadata_source,
+            "created_at": book.created_at,
+            "updated_at": book.updated_at,
+            "authors": authors,
+            "series": series,
+            "library_items": library_items,
+        }
+        return BookResponse.model_validate(data)
 
     async def get_books(
         self,
