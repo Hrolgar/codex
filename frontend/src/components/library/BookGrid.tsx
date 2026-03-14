@@ -1,8 +1,8 @@
-import type { Book } from "@/api/client";
+import type { BookListItem } from "@/api/client";
 import BookCard from "./BookCard";
 
 interface BookGridProps {
-  books: Book[];
+  books: BookListItem[];
   isLoading?: boolean;
 }
 

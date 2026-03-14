@@ -12,19 +12,61 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 // Types
-export interface Book {
-  id: number;
+export interface BookListItem {
+  id: string;
   title: string;
-  author: string;
-  media_type: "ebook" | "audiobook";
-  cover_path?: string;
+  author: string | null;
+  media_type: string;
+  cover_url: string | null;
+  isbn_13: string | null;
+  publish_year: number | null;
+}
+
+export interface AuthorBrief {
+  id: string;
+  name: string;
+  role: string;
+}
+
+export interface SeriesBrief {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export interface LibraryItemBrief {
+  id: string;
+  library_id: string;
   file_path: string;
-  library_id: number;
-  metadata?: Record<string, unknown>;
+  file_format: string | null;
+  file_size: number | null;
+}
+
+export interface BookDetail {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  cover_url: string | null;
+  media_type: string;
+  language: string | null;
+  publish_year: number | null;
+  page_count: number | null;
+  duration_seconds: number | null;
+  isbn_10: string | null;
+  isbn_13: string | null;
+  asin: string | null;
+  openlibrary_key: string | null;
+  metadata_source: string | null;
+  authors: AuthorBrief[];
+  series: SeriesBrief[];
+  library_items: LibraryItemBrief[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface BooksResponse {
-  items: Book[];
+  items: BookListItem[];
   total: number;
   page: number;
   per_page: number;
@@ -75,8 +117,8 @@ export function getBooks(params: {
   return request<BooksResponse>(`/books?${query}`);
 }
 
-export function getBook(id: number) {
-  return request<Book>(`/books/${id}`);
+export function getBook(id: string) {
+  return request<BookDetail>(`/books/${id}`);
 }
 
 export function getLibraries() {

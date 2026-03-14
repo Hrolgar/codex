@@ -1,16 +1,20 @@
+import { Link } from "react-router-dom";
 import { BookOpen, Headphones } from "lucide-react";
-import type { Book } from "@/api/client";
+import type { BookListItem } from "@/api/client";
 
-export default function BookCard({ book }: { book: Book }) {
+export default function BookCard({ book }: { book: BookListItem }) {
   const isAudiobook = book.media_type === "audiobook";
 
   return (
-    <div className="group bg-gray-900 rounded-lg overflow-hidden border border-gray-800 hover:border-indigo-500/50 transition-colors">
+    <Link
+      to={`/books/${book.id}`}
+      className="group bg-gray-900 rounded-lg overflow-hidden border border-gray-800 hover:border-indigo-500/50 transition-colors"
+    >
       {/* Cover */}
       <div className="aspect-[2/3] bg-gray-800 flex items-center justify-center relative">
-        {book.cover_path ? (
+        {book.cover_url ? (
           <img
-            src={book.cover_path}
+            src={book.cover_url}
             alt={book.title}
             className="w-full h-full object-cover"
           />
@@ -36,8 +40,13 @@ export default function BookCard({ book }: { book: Book }) {
         <h3 className="text-sm font-medium text-gray-100 truncate">
           {book.title}
         </h3>
-        <p className="text-xs text-gray-400 truncate mt-1">{book.author}</p>
+        <p className="text-xs text-gray-400 truncate mt-1">
+          {book.author ?? "Unknown author"}
+        </p>
+        {book.publish_year && (
+          <p className="text-xs text-gray-500 mt-0.5">{book.publish_year}</p>
+        )}
       </div>
-    </div>
+    </Link>
   );
 }
