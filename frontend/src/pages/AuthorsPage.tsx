@@ -81,9 +81,9 @@ export default function AuthorsPage() {
       ) : authors && authors.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {authors.map((author) => {
-            const ownedCount = 0; // Will be populated when API returns owned_count
+            const ownedCount = author.owned_count ?? 0;
             const totalCount = author.book_count;
-            const pct = totalCount > 0 ? (ownedCount / totalCount) * 100 : 0;
+            const pct = totalCount > 0 ? Math.round((ownedCount / totalCount) * 100) : 0;
 
             return (
               <Link

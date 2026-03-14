@@ -20,6 +20,7 @@ export interface AuthorListItem {
   name: string;
   sort_name: string | null;
   book_count: number;
+  owned_count: number;
   monitored: boolean;
   photo_url: string | null;
 }
@@ -153,7 +154,7 @@ export function getAuthor(id: string) {
 }
 
 export function addAuthor(name: string) {
-  return request<AuthorListItem>("/authors", {
+  return request<void>("/authors", {
     method: "POST",
     body: JSON.stringify({ name }),
   });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAuthor, refreshAuthor, deleteAuthor } from "@/api/client";
+import { getAuthor, refreshAuthor, deleteAuthor, getSeriesDetail } from "@/api/client";
 import type { BookListItem } from "@/api/client";
 import {
   ArrowLeft,
@@ -24,6 +24,7 @@ export default function AuthorDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [collapsedSeries, setCollapsedSeries] = useState<Set<string>>(new Set());
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const { data: author, isLoading, error } = useQuery({
     queryKey: ["author", id],
@@ -34,12 +35,16 @@ export default function AuthorDetailPage() {
   const refreshMutation = useMutation({
     mutationFn: () => refreshAuthor(id!),
     onSuccess: () => {
+      setRefreshError(null);
       queryClient.invalidateQueries({ queryKey: ["author", id] });
+    },
+    onError: (err: Error) => {
+      setRefreshError(err.message || "Failed to refresh author");
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteAuthor(id!, true),
+    mutationFn: (removeBooks: boolean) => deleteAuthor(id!, removeBooks),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["authors"] });
       navigate("/");
@@ -135,25 +140,35 @@ export default function AuthorDetailPage() {
                 />
                 Refresh
               </button>
+              {refreshError && (
+                <span className="text-xs text-red-400">{refreshError}</span>
+              )}
               {showDeleteConfirm ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-red-400">Delete?</span>
+                  <span className="text-sm text-red-400">Remove books too?</span>
                   <button
-                    onClick={() => deleteMutation.mutate()}
+                    onClick={() => deleteMutation.mutate(true)}
                     disabled={deleteMutation.isPending}
                     className="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors"
                   >
                     {deleteMutation.isPending ? (
                       <Loader2 size={14} className="animate-spin" />
                     ) : (
-                      "Yes"
+                      "Remove Books"
                     )}
                   </button>
                   <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200 bg-gray-800 rounded-lg transition-colors"
+                    onClick={() => deleteMutation.mutate(false)}
+                    disabled={deleteMutation.isPending}
+                    className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
                   >
-                    No
+                    Keep Books
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    Cancel
                   </button>
                 </div>
               ) : (
@@ -347,13 +362,7 @@ function SeriesBookPlaceholder({
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["series", seriesId],
-    queryFn: async () => {
-      const res = await fetch(`/api/series/${seriesId}`);
-      if (!res.ok) throw new Error("Failed to load series");
-      return res.json() as Promise<{
-        books: (BookListItem & { position: number; owned?: boolean })[];
-      }>;
-    },
+    queryFn: () => getSeriesDetail(seriesId),
   });
 
   if (isLoading) {
