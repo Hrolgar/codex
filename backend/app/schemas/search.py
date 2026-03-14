@@ -17,5 +17,6 @@ class SearchResult(BaseModel):
     isbn: str | None = None
     cover_url: str | None = None
     source: str | None = None
+    download_url: str | None = None
     owned: bool = False
     match_confidence: float = 0.0

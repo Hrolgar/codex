@@ -49,10 +49,9 @@ async def search_prowlarr(
 ) -> list[SearchResult]:
     """Search Prowlarr for books/audiobooks and return SearchResult list."""
     categories = MEDIA_TYPE_CATEGORIES.get(media_type, [CAT_EBOOKS, CAT_AUDIOBOOKS])
-    cat_param = ",".join(str(c) for c in categories)
 
     url = f"{base_url.rstrip('/')}/api/v1/search"
-    params = {"query": query, "categories": cat_param}
+    params = {"query": query, "categories": categories}
     headers = {"X-Api-Key": api_key}
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -78,12 +77,15 @@ async def search_prowlarr(
                 isbn = m.group(1)
                 break
 
+        download_url = item.get("downloadUrl") or None
+
         results.append(
             SearchResult(
                 title=title,
                 author=author,
                 isbn=isbn,
                 source=source,
+                download_url=download_url,
                 owned=False,
                 match_confidence=0.0,
             )
