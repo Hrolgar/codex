@@ -4,9 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CODEX_", env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env")
 
-    database_url: str = "postgresql+asyncpg://codex:codex@localhost:5432/codex"
+    database_url: str = "postgresql+asyncpg://codex:codex@db:5432/codex"
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = False

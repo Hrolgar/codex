@@ -2,6 +2,9 @@ services:
   codex:
     build: .
     env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://codex:${POSTGRES_PASSWORD:-changeme}@db:5432/codex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     ports:
       - "8000:8000"
     volumes:
