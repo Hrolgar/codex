@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Book, Library, LibraryItem
+from app.services import settings_service
 
 router = APIRouter()
 
@@ -18,3 +20,35 @@ async def stats(db: AsyncSession = Depends(get_db)):
         "libraries": libraries_count or 0,
         "library_items": items_count or 0,
     }
+
+
+@router.get("/settings")
+async def get_settings(db: AsyncSession = Depends(get_db)):
+    """Get all settings with schema for the frontend to render forms."""
+    values = await settings_service.get_all_settings(db)
+    schema = settings_service.get_settings_schema()
+
+    # Mask secret values
+    for cat in schema:
+        for s in cat["settings"]:
+            key = s["key"]
+            s["value"] = ""
+            if key in values:
+                if s["is_secret"] and values[key]:
+                    s["value"] = "••••••••"
+                else:
+                    s["value"] = values[key]
+    return schema
+
+
+class SettingsUpdate(BaseModel):
+    settings: dict[str, str]
+
+
+@router.put("/settings")
+async def update_settings(body: SettingsUpdate, db: AsyncSession = Depends(get_db)):
+    """Update settings from the UI."""
+    # Don't save masked placeholder values
+    clean = {k: v for k, v in body.settings.items() if v != "••••••••"}
+    await settings_service.set_settings_bulk(db, clean)
+    return {"status": "ok"}

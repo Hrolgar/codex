@@ -15,9 +15,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies (use requirements style to avoid hatchling package discovery)
 COPY backend/pyproject.toml .
-RUN pip install --no-cache-dir .[scanners]
+RUN pip install --no-cache-dir \
+    "fastapi>=0.115" "uvicorn[standard]" "sqlalchemy[asyncio]>=2.0" \
+    asyncpg alembic pydantic-settings httpx python-multipart isbnlib rapidfuzz \
+    ebooklib mutagen
 
 # Copy backend application
 COPY backend/app app/
@@ -27,6 +30,9 @@ COPY backend/alembic.ini .
 # Copy frontend build output to serve as static files
 COPY --from=frontend-build /build/dist /app/static
 
+# Persistent data directory (settings DB, cover cache)
+VOLUME /app/data
+
 EXPOSE 8000
 
-CMD ["uvicorn", "app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
