@@ -7,7 +7,8 @@ from app.metadata.base import MetadataResult
 from app.metadata.google_books import GoogleBooksProvider
 from app.metadata.hardcover import HardcoverProvider
 from app.metadata.openlibrary import OpenLibraryProvider
-from app.models import Author, Book, BookAuthor
+from app.models import Book
+from app.services.entity_service import get_or_create_author, link_book_author
 from app.services.settings_service import get_setting
 
 logger = logging.getLogger(__name__)
@@ -79,24 +80,9 @@ class MetadataService:
             book.metadata_source = meta.source
 
     async def _ensure_authors(self, book: Book, author_names: list[str]) -> None:
-        from sqlalchemy import select
-
         for name in author_names:
-            stmt = select(Author).where(Author.name == name)
-            result = await self.db.execute(stmt)
-            author = result.scalar_one_or_none()
-            if not author:
-                author = Author(name=name)
-                self.db.add(author)
-                await self.db.flush()
-
-            existing = await self.db.execute(
-                select(BookAuthor).where(
-                    BookAuthor.book_id == book.id, BookAuthor.author_id == author.id
-                )
-            )
-            if not existing.scalar_one_or_none():
-                self.db.add(BookAuthor(book_id=book.id, author_id=author.id, role="author"))
+            author = await get_or_create_author(self.db, name)
+            await link_book_author(self.db, book.id, author.id, role="author")
 
     async def enrich_unmatched(self) -> int:
         """Find books without metadata_source and try to enrich them. Returns count of enriched."""

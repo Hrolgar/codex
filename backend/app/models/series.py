@@ -12,7 +12,7 @@ class Series(Base):
     __tablename__ = "series"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(500))
+    name: Mapped[str] = mapped_column(String(500), unique=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

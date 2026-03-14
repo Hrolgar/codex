@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import uuid4
 
 from app.database import get_db
 from app.models import Book, Author, BookAuthor, Library, LibraryItem
 from app.metadata.openlibrary import get_cover_url
+from app.services.entity_service import get_or_create_author, link_book_author
 
 router = APIRouter()
 
@@ -12,9 +13,12 @@ router = APIRouter()
 @router.post("/seed")
 async def seed(db: AsyncSession = Depends(get_db)):
     # Create demo library
-    lib = Library(name="Demo Library", scanner_type="filesystem", config={"path": "/books"})
-    db.add(lib)
-    await db.flush()
+    result = await db.execute(select(Library).where(Library.name == "Demo Library"))
+    lib = result.scalar_one_or_none()
+    if not lib:
+        lib = Library(name="Demo Library", scanner_type="filesystem", config={"path": "/books"})
+        db.add(lib)
+        await db.flush()
 
     books_data = [
         ("The Pragmatic Programmer", "David Thomas", "ebook", 2019, "9780135957059"),
@@ -31,16 +35,20 @@ async def seed(db: AsyncSession = Depends(get_db)):
         ("Ready Player One", "Ernest Cline", "audiobook", 2011, "9780307887443"),
     ]
 
+    created = 0
     for title, author_name, media_type, year, isbn in books_data:
+        # Skip if book with this ISBN already exists
+        existing = await db.execute(select(Book).where(Book.isbn_13 == isbn))
+        if existing.scalar_one_or_none():
+            continue
+
         book = Book(title=title, media_type=media_type, publish_year=year, isbn_13=isbn, cover_url=get_cover_url(isbn))
         db.add(book)
         await db.flush()
 
-        author = Author(name=author_name)
-        db.add(author)
-        await db.flush()
+        author = await get_or_create_author(db, author_name)
+        await link_book_author(db, book.id, author.id, role="author")
 
-        db.add(BookAuthor(book_id=book.id, author_id=author.id, role="author"))
         db.add(LibraryItem(
             library_id=lib.id,
             book_id=book.id,
@@ -48,9 +56,10 @@ async def seed(db: AsyncSession = Depends(get_db)):
             file_format="epub" if media_type == "ebook" else "m4b",
             matched=True,
         ))
+        created += 1
 
     await db.commit()
-    return {"status": "ok", "books_created": len(books_data)}
+    return {"status": "ok", "books_created": created}
 
 
 @router.post("/clear")
