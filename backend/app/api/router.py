@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api import authors, books, dev, library, search, series, system
+from app.api import authors, books, dev, downloads, library, search, series, system
 
 api_router = APIRouter()
 api_router.include_router(system.router, prefix="/system", tags=["system"])
@@ -9,4 +9,5 @@ api_router.include_router(books.router, prefix="/books", tags=["books"])
 api_router.include_router(authors.router, prefix="/authors", tags=["authors"])
 api_router.include_router(series.router, prefix="/series", tags=["series"])
 api_router.include_router(search.router, prefix="/search", tags=["search"])
+api_router.include_router(downloads.router, prefix="/downloads", tags=["downloads"])
 api_router.include_router(dev.router, prefix="/dev", tags=["dev"])

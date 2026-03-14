@@ -1,13 +1,14 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
-from app.database import engine
+from app.database import async_session, engine
 from app.models import Base
 
 STATIC_DIR = Path("/app/static")
@@ -17,7 +18,15 @@ STATIC_DIR = Path("/app/static")
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Store session factory on app state for WebSocket access
+    app.state.db_session = async_session
+
+    # Start background download queue processor
+    from app.services.download_service import process_download_queue
+    task = asyncio.create_task(process_download_queue())
     yield
+    task.cancel()
     await engine.dispose()
 
 
@@ -37,6 +46,15 @@ app.include_router(api_router, prefix="/api")
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+# WebSocket endpoint for download progress
+from app.api.downloads import ws_downloads  # noqa: E402
+
+
+@app.websocket("/api/ws/downloads")
+async def websocket_downloads(websocket: WebSocket):
+    await ws_downloads(websocket)
 
 
 # Serve frontend: static assets at their real paths, SPA fallback for client-side routes
