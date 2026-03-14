@@ -1,12 +1,13 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
 
 class LibraryCreate(BaseModel):
     name: str
-    scanner_type: str
+    scanner_type: Literal["filesystem", "audiobookshelf"]
     config: dict | None = None
 
 

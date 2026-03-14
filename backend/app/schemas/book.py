@@ -31,6 +31,16 @@ class BookCreate(BaseModel):
     asin: str | None = None
 
 
+class LibraryItemBrief(BaseModel):
+    id: uuid.UUID
+    library_id: uuid.UUID
+    file_path: str
+    file_format: str | None = None
+    file_size: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class BookResponse(BaseModel):
     id: uuid.UUID
     title: str
@@ -49,6 +59,7 @@ class BookResponse(BaseModel):
     metadata_source: str | None = None
     authors: list[AuthorBrief] = []
     series: list[SeriesBrief] = []
+    library_items: list[LibraryItemBrief] = []
     created_at: datetime
     updated_at: datetime
 
@@ -59,4 +70,4 @@ class BookListResponse(BaseModel):
     items: list[BookResponse]
     total: int
     page: int
-    page_size: int
+    per_page: int

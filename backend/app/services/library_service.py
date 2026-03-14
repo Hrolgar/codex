@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Author, Book, BookAuthor, Library, LibraryItem, Series, SeriesBook
-from app.schemas.book import AuthorBrief, BookResponse, SeriesBrief
+from app.schemas.book import AuthorBrief, BookResponse, LibraryItemBrief, SeriesBrief
 
 
 class LibraryService:
@@ -56,14 +56,17 @@ class LibraryService:
             return None
         authors = await self._get_book_authors(book_id)
         series = await self._get_book_series(book_id)
-        return BookResponse.model_validate(book, update={"authors": authors, "series": series})
+        library_items = await self._get_book_library_items(book_id)
+        return BookResponse.model_validate(
+            book, update={"authors": authors, "series": series, "library_items": library_items}
+        )
 
-    async def search_books(
+    async def get_books(
         self,
         query: str | None = None,
         media_type: str | None = None,
         page: int = 1,
-        page_size: int = 20,
+        per_page: int = 20,
     ) -> tuple[list[BookResponse], int]:
         stmt = select(Book)
         count_stmt = select(func.count(Book.id))
@@ -79,7 +82,7 @@ class LibraryService:
 
         total = await self.db.scalar(count_stmt) or 0
 
-        stmt = stmt.order_by(Book.title).offset((page - 1) * page_size).limit(page_size)
+        stmt = stmt.order_by(Book.title).offset((page - 1) * per_page).limit(per_page)
         result = await self.db.execute(stmt)
         books = result.scalars().all()
 
@@ -108,3 +111,8 @@ class LibraryService:
         )
         result = await self.db.execute(stmt)
         return [SeriesBrief(id=row.id, name=row.name, position=row.position) for row in result]
+
+    async def _get_book_library_items(self, book_id: uuid.UUID) -> list[LibraryItemBrief]:
+        stmt = select(LibraryItem).where(LibraryItem.book_id == book_id)
+        result = await self.db.execute(stmt)
+        return [LibraryItemBrief.model_validate(item) for item in result.scalars().all()]

@@ -59,4 +59,4 @@ async def trigger_scan(
     if library.scan_status == "scanning":
         raise HTTPException(status_code=409, detail="Scan already in progress")
     background_tasks.add_task(run_scan, library_id)
-    return {"status": "scan_started", "library_id": str(library_id)}
+    return {"status": "scanning"}
