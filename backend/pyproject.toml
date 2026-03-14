@@ -1,0 +1,32 @@
+[project]
+name = "codex"
+version = "0.1.0"
+description = "Self-hosted book and audiobook library manager"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg",
+    "alembic",
+    "pydantic-settings",
+    "httpx",
+    "python-multipart",
+    "isbnlib",
+    "rapidfuzz",
+]
+
+[project.optional-dependencies]
+scanners = [
+    "ebooklib",
+    "mutagen",
+]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
