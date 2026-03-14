@@ -65,6 +65,8 @@ class LibraryService:
         self,
         query: str | None = None,
         media_type: str | None = None,
+        author_id: uuid.UUID | None = None,
+        series_id: uuid.UUID | None = None,
         page: int = 1,
         per_page: int = 24,
     ) -> tuple[list[BookListItem], int]:
@@ -74,6 +76,12 @@ class LibraryService:
             conditions.append(Book.title.ilike(f"%{query}%"))
         if media_type:
             conditions.append(Book.media_type == media_type)
+        if author_id:
+            author_book_ids = select(BookAuthor.book_id).where(BookAuthor.author_id == author_id)
+            conditions.append(Book.id.in_(author_book_ids))
+        if series_id:
+            series_book_ids = select(SeriesBook.book_id).where(SeriesBook.series_id == series_id)
+            conditions.append(Book.id.in_(series_book_ids))
 
         # Count query
         count_stmt = select(func.count(Book.id))

@@ -14,13 +14,17 @@ router = APIRouter()
 async def list_books(
     search: str | None = Query(None, description="Search query"),
     media_type: str | None = Query(None),
+    author_id: uuid.UUID | None = Query(None, description="Filter by author"),
+    series_id: uuid.UUID | None = Query(None, description="Filter by series"),
     page: int = Query(1, ge=1),
     per_page: int = Query(24, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     svc = LibraryService(db)
     items, total = await svc.get_books(
-        query=search, media_type=media_type, page=page, per_page=per_page
+        query=search, media_type=media_type,
+        author_id=author_id, series_id=series_id,
+        page=page, per_page=per_page,
     )
     return BookListResponse(items=items, total=total, page=page, per_page=per_page)
 
