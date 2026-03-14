@@ -8,6 +8,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return undefined as T;
+  }
   return res.json();
 }
 
@@ -31,13 +34,13 @@ export interface SeriesListItem {
   id: string;
   name: string;
   book_count: number;
-  author_names: string;
+  author_names: string | null;
 }
 
 export interface SeriesDetail {
   id: string;
   name: string;
-  books: (BookListItem & { position: number | null })[];
+  books: (BookListItem & { position: number })[];
   authors: { id: string; name: string }[];
 }
 
@@ -102,7 +105,7 @@ export interface BooksResponse {
 }
 
 export interface Library {
-  id: number;
+  id: string;
   name: string;
   scanner_type: string;
   config: Record<string, unknown>;
@@ -185,11 +188,11 @@ export function createLibrary(body: {
   });
 }
 
-export function deleteLibrary(id: number) {
+export function deleteLibrary(id: string) {
   return request<void>(`/libraries/${id}`, { method: "DELETE" });
 }
 
-export function scanLibrary(id: number) {
+export function scanLibrary(id: string) {
   return request<{ status: string }>(`/libraries/${id}/scan`, {
     method: "POST",
   });
