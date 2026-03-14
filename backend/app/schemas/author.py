@@ -10,7 +10,9 @@ class AuthorListItem(BaseModel):
     name: str
     sort_name: str | None = None
     monitored: bool = False
+    photo_url: str | None = None
     book_count: int
+    owned_count: int = 0
 
     model_config = {"from_attributes": True}
 

@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Author, Book
@@ -74,10 +75,14 @@ def _pick_best_edition(editions: list[dict]) -> dict | None:
     return scored[0][1]
 
 
-async def add_author(db: AsyncSession, name: str) -> Author:
-    """Search OpenLibrary for an author, add them as monitored, and fetch their catalog."""
+async def create_monitored_author(db: AsyncSession, name: str) -> Author:
+    """Search OpenLibrary for an author and create/update them as monitored.
+
+    This is the synchronous part — does NOT fetch the full catalog.
+    Use refresh_author_catalog() separately for that.
+    """
     async with httpx.AsyncClient(timeout=15) as client:
-        # Step 1: Search for the author
+        # Step 1: Search for the author on OpenLibrary
         data = await _ol_get(client, "/search/authors.json", params={"q": name})
         if not data or not data.get("docs"):
             # Fall back to just creating the author without OL data
@@ -90,7 +95,7 @@ async def add_author(db: AsyncSession, name: str) -> Author:
         ol_key = top.get("key", "")  # e.g. 'OL23919A'
         author_name = top.get("name", name)
 
-        # Step 2: Get or create the author
+        # Step 2: Get or create the author using OL canonical name
         author = await get_or_create_author(db, author_name)
         author.monitored = True
         author.openlibrary_key = ol_key
@@ -102,10 +107,25 @@ async def add_author(db: AsyncSession, name: str) -> Author:
             author.photo_url = _author_photo_url(ol_key)
 
     await db.commit()
+    return author
 
-    # Step 4: Fetch catalog (works) — done outside the httpx client context
+
+async def add_author(db: AsyncSession, name: str) -> Author:
+    """Search OpenLibrary for an author, add them as monitored, and fetch their catalog.
+
+    Convenience wrapper that calls create_monitored_author + refresh_author_catalog.
+    """
+    author = await create_monitored_author(db, name)
     await refresh_author_catalog(db, author)
     return author
+
+
+async def _find_by_openlibrary_key(db: AsyncSession, work_key: str) -> Book | None:
+    """Find an existing book by its OpenLibrary work key."""
+    if not work_key:
+        return None
+    result = await db.execute(select(Book).where(Book.openlibrary_key == work_key))
+    return result.scalar_one_or_none()
 
 
 async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
@@ -134,12 +154,14 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                 if not work_title:
                     continue
 
-                # Extract series info if present from subjects
-                series_name = None
-                series_pos = None
-                subjects = entry.get("subjects", [])
-                # OpenLibrary doesn't have structured series data in works,
-                # but we can check the work description or subjects
+                work_key_short = work_key.replace("/works/", "")
+
+                # Check for existing book by OpenLibrary work key first (W5)
+                existing_by_key = await _find_by_openlibrary_key(db, work_key_short)
+                if existing_by_key:
+                    existing_by_key.monitored = True
+                    await link_book_author(db, existing_by_key.id, author.id)
+                    continue
 
                 # Check for duplicates by title + author
                 is_dup, confidence, matched_id = await check_duplicate(
@@ -147,15 +169,16 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                 )
 
                 if is_dup and matched_id:
-                    # Mark existing book as monitored
+                    # Mark existing book as monitored and store OL key
                     existing = await db.get(Book, matched_id)
                     if existing:
                         existing.monitored = True
+                        if not existing.openlibrary_key:
+                            existing.openlibrary_key = work_key_short
                         await link_book_author(db, existing.id, author.id)
                     continue
 
                 # Fetch editions to get ISBNs and other metadata
-                work_key_short = work_key.replace("/works/", "")
                 editions_data = await _ol_get(
                     client, f"/works/{work_key_short}/editions.json", params={"limit": 50}
                 )
@@ -195,6 +218,8 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                         existing = await db.get(Book, matched_id2)
                         if existing:
                             existing.monitored = True
+                            if not existing.openlibrary_key:
+                                existing.openlibrary_key = work_key_short
                             await link_book_author(db, existing.id, author.id)
                         continue
 

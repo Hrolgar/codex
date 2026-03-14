@@ -24,13 +24,29 @@ async def list_authors(
     search: str | None = Query(None, description="Filter authors by name"),
     db: AsyncSession = Depends(get_db),
 ):
+    # Subquery: count of monitored books that have at least one LibraryItem
+    owned_count_sub = (
+        select(func.count(func.distinct(BookAuthor.book_id)))
+        .join(Book, Book.id == BookAuthor.book_id)
+        .join(LibraryItem, LibraryItem.book_id == Book.id)
+        .where(
+            BookAuthor.author_id == Author.id,
+            Book.monitored.is_(True),
+        )
+        .correlate(Author)
+        .scalar_subquery()
+        .label("owned_count")
+    )
+
     stmt = (
         select(
             Author.id,
             Author.name,
             Author.sort_name,
             Author.monitored,
+            Author.photo_url,
             func.count(BookAuthor.book_id).label("book_count"),
+            owned_count_sub,
         )
         .join(BookAuthor, Author.id == BookAuthor.author_id)
         .group_by(Author.id)
@@ -48,7 +64,9 @@ async def list_authors(
             name=row.name,
             sort_name=row.sort_name,
             monitored=row.monitored,
+            photo_url=row.photo_url,
             book_count=row.book_count,
+            owned_count=row.owned_count or 0,
         )
         for row in result
     ]
@@ -177,32 +195,33 @@ async def create_monitored_author(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """Add a monitored author by name. Triggers catalog fetch as background task."""
-    from app.services.entity_service import get_or_create_author
+    """Add a monitored author by name. Creates author synchronously, then
+    triggers catalog refresh as a background task."""
+    from app.services.catalog_service import create_monitored_author as svc_create
 
-    author = await get_or_create_author(db, body.name)
-    author.monitored = True
-    await db.commit()
+    # Synchronously create/find the author and fetch OL metadata (bio, photo)
+    author = await svc_create(db, body.name)
 
-    # Kick off catalog fetch in background
-    async def _fetch_catalog(author_id: uuid.UUID, author_name: str):
-        from app.services.catalog_service import add_author
+    # Kick off catalog refresh in background (fetches all works — slow)
+    if author.openlibrary_key:
+        async def _refresh_catalog(author_id: uuid.UUID):
+            from app.services.catalog_service import refresh_author_catalog
 
-        async with async_session() as bg_db:
-            # Re-fetch author in this session
-            a = await bg_db.get(Author, author_id)
-            if not a:
-                return
-            try:
-                await add_author(bg_db, author_name)
-            except Exception:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "Background catalog fetch failed for %s", author_name, exc_info=True
-                )
+            async with async_session() as bg_db:
+                a = await bg_db.get(Author, author_id)
+                if not a:
+                    return
+                try:
+                    await refresh_author_catalog(bg_db, a)
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "Background catalog fetch failed for %s", a.name, exc_info=True
+                    )
 
-    background_tasks.add_task(_fetch_catalog, author.id, body.name)
+        background_tasks.add_task(_refresh_catalog, author.id)
 
+    # Return full author detail (no books yet — they load in background)
     return AuthorDetail(
         id=author.id,
         name=author.name,
@@ -271,18 +290,38 @@ async def delete_monitored_author(
         unowned_ids = [row[0] for row in result]
 
         if unowned_ids:
-            # Delete book_authors links for these books
-            await db.execute(
-                BookAuthor.__table__.delete().where(BookAuthor.book_id.in_(unowned_ids))
+            # Check which unowned books have other authors (co-authored)
+            coauthored_stmt = (
+                select(BookAuthor.book_id)
+                .where(
+                    BookAuthor.book_id.in_(unowned_ids),
+                    BookAuthor.author_id != author_id,
+                )
             )
-            # Delete series_books links
-            await db.execute(
-                SeriesBook.__table__.delete().where(SeriesBook.book_id.in_(unowned_ids))
-            )
-            # Delete the books
-            await db.execute(
-                Book.__table__.delete().where(Book.id.in_(unowned_ids))
-            )
+            coauthored_result = await db.execute(coauthored_stmt)
+            coauthored_ids = {row[0] for row in coauthored_result}
+
+            # For co-authored books, only remove this author's link
+            if coauthored_ids:
+                await db.execute(
+                    BookAuthor.__table__.delete().where(
+                        BookAuthor.book_id.in_(coauthored_ids),
+                        BookAuthor.author_id == author_id,
+                    )
+                )
+
+            # For sole-author books, delete the books entirely
+            sole_author_ids = [bid for bid in unowned_ids if bid not in coauthored_ids]
+            if sole_author_ids:
+                await db.execute(
+                    BookAuthor.__table__.delete().where(BookAuthor.book_id.in_(sole_author_ids))
+                )
+                await db.execute(
+                    SeriesBook.__table__.delete().where(SeriesBook.book_id.in_(sole_author_ids))
+                )
+                await db.execute(
+                    Book.__table__.delete().where(Book.id.in_(sole_author_ids))
+                )
 
     # Unmonitor the author (or delete if they have no remaining books)
     remaining_stmt = select(func.count(BookAuthor.book_id)).where(BookAuthor.author_id == author_id)

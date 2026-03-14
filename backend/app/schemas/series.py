@@ -16,6 +16,7 @@ class SeriesListItem(BaseModel):
 
 class SeriesBookItem(BookListItem):
     position: float = 0.0
+    owned: bool = False
 
 
 class SeriesAuthor(BaseModel):

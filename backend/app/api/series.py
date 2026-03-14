@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.matching import escape_like
 from app.database import get_db
-from app.models import Author, Book, BookAuthor, Series, SeriesBook
+from app.models import Author, Book, BookAuthor, LibraryItem, Series, SeriesBook
 from app.schemas.series import SeriesAuthor, SeriesBookItem, SeriesDetail, SeriesListItem
 
 router = APIRouter()
@@ -73,6 +73,15 @@ async def get_series(series_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         .label("author")
     )
 
+    # Owned subquery: does this book have any library items?
+    owned_subquery = (
+        select(func.count(LibraryItem.id))
+        .where(LibraryItem.book_id == Book.id)
+        .correlate(Book)
+        .scalar_subquery()
+        .label("owned_count")
+    )
+
     # Books in this series, ordered by position
     books_stmt = (
         select(
@@ -84,6 +93,7 @@ async def get_series(series_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
             Book.isbn_13,
             Book.publish_year,
             SeriesBook.position,
+            owned_subquery,
         )
         .join(SeriesBook, Book.id == SeriesBook.book_id)
         .where(SeriesBook.series_id == series_id)
@@ -100,6 +110,7 @@ async def get_series(series_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
             isbn_13=row.isbn_13,
             publish_year=row.publish_year,
             position=row.position,
+            owned=(row.owned_count or 0) > 0,
         )
         for row in books_result
     ]
