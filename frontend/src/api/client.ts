@@ -213,6 +213,68 @@ export function updateSettings(settings: Record<string, string>) {
   });
 }
 
+// Search & Download types
+export interface SearchResult {
+  book_id: string | null;
+  title: string;
+  author: string | null;
+  isbn: string | null;
+  cover_url: string | null;
+  source: string | null;
+  owned: boolean;
+  match_confidence: number;
+}
+
+export interface DownloadResponse {
+  id: string;
+  book_id: string | null;
+  source_type: string;
+  source_url: string;
+  status: string;
+  progress: number;
+  error: string | null;
+  target_path: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DownloadCreate {
+  source_url: string;
+  source_type: string;
+  book_id?: string;
+  filename?: string;
+}
+
+// Search & Download functions
+export function searchExternal(q: string, mediaType?: string) {
+  const query = new URLSearchParams({ q });
+  if (mediaType) query.set("media_type", mediaType);
+  return request<SearchResult[]>(`/search?${query}`);
+}
+
+export function getDownloads(status?: string) {
+  const query = new URLSearchParams();
+  if (status) query.set("status", status);
+  return request<DownloadResponse[]>(`/downloads?${query}`);
+}
+
+export function createDownload(body: DownloadCreate) {
+  return request<DownloadResponse>("/downloads", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteDownload(id: string) {
+  return request<void>(`/downloads/${id}`, { method: "DELETE" });
+}
+
+export function retryDownload(id: string) {
+  return request<DownloadResponse>(`/downloads/${id}/retry`, {
+    method: "POST",
+  });
+}
+
 export function seedDemoData() {
   return request<{ status: string }>("/dev/seed", { method: "POST" });
 }
