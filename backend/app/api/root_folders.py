@@ -16,8 +16,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Allowed path prefixes for root folders
-_ALLOWED_PREFIXES = ('/books', '/downloads', '/data', '/mnt', '/media', '/library', '/storage')
+# Blocked system paths — everything else is allowed
 _BLOCKED_PREFIXES = ('/app', '/proc', '/sys', '/etc', '/dev', '/usr', '/var', '/bin', '/sbin', '/root', '/tmp')
 
 
@@ -30,11 +29,6 @@ def _validate_root_folder_path(path: str) -> None:
                 status_code=400,
                 detail=f"Path '{path}' resolves to a restricted system directory.",
             )
-    if not any(real == allowed or real.startswith(allowed + '/') for allowed in _ALLOWED_PREFIXES):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path must start with one of: {', '.join(_ALLOWED_PREFIXES)}",
-        )
 
 
 # --- Schemas ---
