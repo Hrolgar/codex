@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import time
 
 import httpx
 
@@ -98,20 +100,43 @@ def _parse_book(book: dict) -> MetadataResult:
 
 
 class HardcoverProvider:
+    MIN_REQUEST_INTERVAL = 1.1  # seconds between requests (stays under 60/min)
+
     def __init__(self, api_key: str):
         self.api_key = api_key
+        self._last_request_time: float = 0.0
 
     async def _query(self, query: str, variables: dict) -> dict:
+        # Rate limit: ensure minimum interval between requests
+        now = time.monotonic()
+        elapsed = now - self._last_request_time
+        if elapsed < self.MIN_REQUEST_INTERVAL:
+            await asyncio.sleep(self.MIN_REQUEST_INTERVAL - elapsed)
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
         async with httpx.AsyncClient(timeout=15) as client:
+            self._last_request_time = time.monotonic()
             resp = await client.post(
                 GRAPHQL_URL,
                 json={"query": query, "variables": variables},
                 headers=headers,
             )
+
+            # Handle 429 Too Many Requests — retry once after waiting
+            if resp.status_code == 429:
+                retry_after = float(resp.headers.get("Retry-After", self.MIN_REQUEST_INTERVAL))
+                logger.warning("Hardcover 429 rate limited, retrying after %.1fs", retry_after)
+                await asyncio.sleep(retry_after)
+                self._last_request_time = time.monotonic()
+                resp = await client.post(
+                    GRAPHQL_URL,
+                    json={"query": query, "variables": variables},
+                    headers=headers,
+                )
+
             resp.raise_for_status()
             return resp.json()
 

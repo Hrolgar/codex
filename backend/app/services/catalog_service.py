@@ -177,7 +177,7 @@ async def _find_by_openlibrary_key(db: AsyncSession, work_key: str) -> Book | No
     if not work_key:
         return None
     result = await db.execute(select(Book).where(Book.openlibrary_key == work_key))
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 
 async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
@@ -212,12 +212,32 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
 
                 work_key_short = work_key.replace("/works/", "")
 
-                # Check for existing book by OpenLibrary work key first (W5)
+                # Check for existing book by OpenLibrary work key first (cheap DB lookup)
                 existing_by_key = await _find_by_openlibrary_key(db, work_key_short)
                 if existing_by_key:
                     existing_by_key.monitored = True
                     await link_book_author(db, existing_by_key.id, author.id)
                     continue
+
+                # Fetch editions (needed for language filter and metadata)
+                editions_data = await _ol_get(
+                    client, f"/works/{work_key_short}/editions.json", params={"limit": 50}
+                )
+                edition_entries = editions_data.get("entries", []) if editions_data else []
+
+                # Apply language filter BEFORE dedup checks
+                if allowed_languages:
+                    work_langs = entry.get("language", [])
+                    logger.debug(
+                        "Language data for %r: work_level=%r, edition_count=%d, edition_langs=%r",
+                        work_title,
+                        work_langs,
+                        len(edition_entries),
+                        [ed.get("languages") for ed in edition_entries[:5]],
+                    )
+                    if not _work_matches_language(entry, edition_entries, allowed_languages):
+                        logger.debug("Skipping work %r — language not in allowed list %s", work_title, allowed_languages)
+                        continue
 
                 # Check for duplicates by title + author
                 is_dup, confidence, matched_id = await check_duplicate(
@@ -232,17 +252,6 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                         if not existing.openlibrary_key:
                             existing.openlibrary_key = work_key_short
                         await link_book_author(db, existing.id, author.id)
-                    continue
-
-                # Fetch editions to get ISBNs and other metadata
-                editions_data = await _ol_get(
-                    client, f"/works/{work_key_short}/editions.json", params={"limit": 50}
-                )
-
-                # Apply language filter before detailed processing
-                edition_entries = editions_data.get("entries", []) if editions_data else []
-                if allowed_languages and not _work_matches_language(entry, edition_entries, allowed_languages):
-                    logger.debug("Skipping work %s — language not in allowed list", work_title)
                     continue
 
                 isbn_13 = None
