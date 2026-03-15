@@ -73,6 +73,9 @@ async def test_connection(
         api_key = await settings_service.get_setting(db, "metadata.hardcover.api_key")
         if not api_key:
             return {"ok": False, "message": "Hardcover API key is not configured."}
+        # Strip Bearer prefix if user included it
+        if api_key.startswith("Bearer "):
+            api_key = api_key[7:]
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.post(
@@ -82,7 +85,14 @@ async def test_connection(
                 )
                 resp.raise_for_status()
                 data = resp.json()
-            user = (data.get("data") or {}).get("me", {}).get("username")
+            # me can be a list or an object depending on API version
+            me = (data.get("data") or {}).get("me")
+            if isinstance(me, list):
+                user = me[0].get("username") if me else None
+            elif isinstance(me, dict):
+                user = me.get("username")
+            else:
+                user = None
             if user:
                 return {"ok": True, "message": f"Connected as: {user}"}
             return {"ok": False, "message": "API key is invalid or unauthorized."}
