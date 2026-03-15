@@ -15,6 +15,8 @@ class ScannedItem:
     cover_url: str | None = None
     series: str | None = None
     media_type: str = "ebook"
+    file_count: int | None = None
+    is_directory: bool = False
     extra: dict = field(default_factory=dict)
 
 
