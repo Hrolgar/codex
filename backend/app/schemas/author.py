@@ -27,6 +27,16 @@ class AuthorSeriesBrief(BaseModel):
 
 class AuthorBookListItem(BookListItem):
     owned: bool = False
+    monitored: bool = True
+
+
+class AuthorMediaGroup(BaseModel):
+    media_type: str  # ebook, audiobook, comic
+    books: list[AuthorBookListItem] = []
+    total: int = 0
+    owned: int = 0
+    missing: int = 0
+    not_monitored: int = 0
 
 
 class AuthorDetail(BaseModel):
@@ -39,7 +49,8 @@ class AuthorDetail(BaseModel):
     photo_url: str | None = None
     catalog_status: str = "idle"
     series: list[AuthorSeriesBrief] = []
-    standalone_books: list[AuthorBookListItem] = []
+    standalone_books: list[AuthorBookListItem] = []  # deprecated, use media_groups
+    media_groups: list[AuthorMediaGroup] = []
 
     model_config = {"from_attributes": True}
 

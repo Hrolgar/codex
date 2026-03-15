@@ -14,6 +14,7 @@ from app.schemas.author import (
     AuthorCreate,
     AuthorDetail,
     AuthorListItem,
+    AuthorMediaGroup,
     AuthorSeriesBrief,
 )
 
@@ -206,6 +207,7 @@ async def get_author(author_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
             Book.cover_url,
             Book.isbn_13,
             Book.publish_year,
+            Book.monitored.label("book_monitored"),
             owned_subquery,
         )
         .join(BookAuthor, Book.id == BookAuthor.book_id)
@@ -224,8 +226,35 @@ async def get_author(author_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
             isbn_13=row.isbn_13,
             publish_year=row.publish_year,
             owned=(row.owned_count or 0) > 0,
+            monitored=row.book_monitored,
         )
         for row in standalone_result
+    ]
+
+    # Group standalone books by media_type
+    groups: dict[str, dict] = {}
+    for book in standalone_books:
+        mt = book.media_type or "ebook"
+        if mt not in groups:
+            groups[mt] = {"books": [], "owned": 0, "missing": 0, "not_monitored": 0}
+        groups[mt]["books"].append(book)
+        if book.owned:
+            groups[mt]["owned"] += 1
+        elif not book.monitored:
+            groups[mt]["not_monitored"] += 1
+        else:
+            groups[mt]["missing"] += 1
+
+    media_groups = [
+        AuthorMediaGroup(
+            media_type=mt,
+            books=g["books"],
+            total=len(g["books"]),
+            owned=g["owned"],
+            missing=g["missing"],
+            not_monitored=g["not_monitored"],
+        )
+        for mt, g in groups.items()
     ]
 
     return AuthorDetail(
@@ -239,6 +268,7 @@ async def get_author(author_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         catalog_status=author.catalog_status,
         series=series_list,
         standalone_books=standalone_books,
+        media_groups=media_groups,
     )
 
 
