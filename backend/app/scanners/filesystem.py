@@ -1,6 +1,5 @@
 import os
 import zipfile
-import xml.etree.ElementTree as ET
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -8,7 +7,7 @@ from app.scanners.base import ScannedItem
 
 EBOOK_EXTENSIONS = {".epub", ".mobi", ".azw3", ".pdf"}
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".m4b", ".flac", ".ogg", ".opus"}
-COMIC_EXTENSIONS = {".cbz", ".cbr"}
+COMIC_EXTENSIONS = {".cbz"}  # CBR (RAR) not supported without rarfile
 
 
 class FilesystemScanner:
@@ -95,7 +94,13 @@ def _extract_comic_metadata(path: Path, item: ScannedItem) -> None:
     try:
         with zipfile.ZipFile(str(path)) as zf:
             if 'ComicInfo.xml' in zf.namelist():
-                info = ET.fromstring(zf.read('ComicInfo.xml'))
+                raw = zf.read('ComicInfo.xml')
+                # Safe XML parsing — defusedxml blocks XXE attacks
+                try:
+                    from defusedxml.ElementTree import fromstring
+                except ImportError:
+                    from xml.etree.ElementTree import fromstring
+                info = fromstring(raw)
                 item.title = info.findtext('Title') or item.title
                 item.author = info.findtext('Writer') or item.author
                 series_name = info.findtext('Series')
