@@ -19,6 +19,7 @@ class SearchResult(BaseModel):
     cover_url: str | None = None
     source: str | None = None
     download_url: str | None = None
+    magnet_url: str | None = None
     owned: bool = False
     match_confidence: float = 0.0
     indexer: str | None = None
@@ -26,3 +27,6 @@ class SearchResult(BaseModel):
     seeders: int | None = None
     leechers: int | None = None
     format: str | None = None
+    protocol: str | None = None
+    publish_date: str | None = None
+    grabs: int | None = None

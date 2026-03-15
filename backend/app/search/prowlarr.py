@@ -1,6 +1,7 @@
 """Prowlarr search provider for ebooks, audiobooks, and comics."""
 from __future__ import annotations
 
+import json
 import re
 
 import httpx
@@ -8,15 +9,18 @@ import httpx
 from app.schemas.search import SearchResult
 
 # Prowlarr category IDs
-CAT_EBOOKS = 7020
-CAT_AUDIOBOOKS = 7030
-CAT_COMICS = 7040
+CAT_BOOKS = 7000      # Books (parent category)
+CAT_EBOOKS = 7020     # Books/EBook
+CAT_AUDIOBOOKS = 3030 # Audio/Audiobook
+CAT_COMICS = 7030     # Books/Comics
 
 MEDIA_TYPE_CATEGORIES = {
-    "ebook": [CAT_EBOOKS],
-    "audiobook": [CAT_AUDIOBOOKS],
-    "comic": [CAT_COMICS],
+    "ebook": [CAT_BOOKS, CAT_EBOOKS],
+    "audiobook": [CAT_BOOKS, CAT_AUDIOBOOKS],
+    "comic": [CAT_BOOKS, CAT_COMICS],
 }
+
+ALL_CATEGORIES = [CAT_BOOKS, CAT_EBOOKS, CAT_AUDIOBOOKS, CAT_COMICS]
 
 
 def _clean_search_query(query: str) -> str:
@@ -73,21 +77,45 @@ def _detect_format(title: str) -> str | None:
     return None
 
 
+def _build_params(
+    query: str,
+    categories: list[int],
+    indexer_ids: list[int] | None = None,
+) -> list[tuple[str, str | int]]:
+    """Build query params as list of tuples for ASP.NET repeated-key binding."""
+    params: list[tuple[str, str | int]] = [("Query", query)]
+    for cat in categories:
+        params.append(("Categories", cat))
+    if indexer_ids:
+        for idx_id in indexer_ids:
+            params.append(("IndexerIds", idx_id))
+    return params
+
+
 async def search_prowlarr(
     base_url: str,
     api_key: str,
     query: str,
     media_type: str | None = None,
+    selected_indexers_json: str | None = None,
 ) -> list[SearchResult]:
     """Search Prowlarr for books/audiobooks and return SearchResult list."""
-    categories = MEDIA_TYPE_CATEGORIES.get(
-        media_type, [CAT_EBOOKS, CAT_AUDIOBOOKS, CAT_COMICS]
-    )
+    categories = MEDIA_TYPE_CATEGORIES.get(media_type, ALL_CATEGORIES)
 
     query = _clean_search_query(query)
 
+    # Parse selected indexer IDs from settings JSON
+    indexer_ids: list[int] | None = None
+    if selected_indexers_json:
+        try:
+            parsed = json.loads(selected_indexers_json)
+            if isinstance(parsed, list) and parsed:
+                indexer_ids = [int(i) for i in parsed]
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+
     url = f"{base_url.rstrip('/')}/api/v1/search"
-    params = {"query": query, "categories": categories}
+    params = _build_params(query, categories, indexer_ids)
     headers = {"X-Api-Key": api_key}
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -115,9 +143,13 @@ async def search_prowlarr(
                 break
 
         download_url = item.get("downloadUrl") or None
+        magnet_url = item.get("magnetUrl") or None
         size = item.get("size") or None
         seeders = item.get("seeders") or None
         leechers = item.get("leechers") or None
+        protocol = item.get("protocol") or None
+        publish_date = item.get("publishDate") or None
+        grabs = item.get("grabs") or None
 
         results.append(
             SearchResult(
@@ -127,6 +159,7 @@ async def search_prowlarr(
                 isbn=isbn,
                 source=source,
                 download_url=download_url,
+                magnet_url=magnet_url,
                 format=fmt,
                 owned=False,
                 match_confidence=0.0,
@@ -134,6 +167,9 @@ async def search_prowlarr(
                 size=size,
                 seeders=seeders,
                 leechers=leechers,
+                protocol=protocol,
+                publish_date=publish_date,
+                grabs=grabs,
             )
         )
 

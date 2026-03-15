@@ -71,8 +71,12 @@ class SearchService:
         if not url or not api_key:
             return []
 
+        selected_indexers = await get_setting(self.db, "prowlarr.selected_indexers")
+
         try:
-            return await search_prowlarr(url, api_key, query, media_type)
+            return await search_prowlarr(
+                url, api_key, query, media_type, selected_indexers
+            )
         except Exception:
             logger.exception("Prowlarr search failed")
             return []
