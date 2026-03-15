@@ -76,10 +76,7 @@ async def search_author(api_key: str, name: str) -> dict | None:
         'q': name, 'queryType': 'authors', 'perPage': 1,
     })
     raw_results = data.get('data', {}).get('search', {}).get('results', [])
-    logger.info("Hardcover search_author raw response: %s", json.dumps(data.get('data', {}), default=str)[:2000])
-    logger.info("Hardcover search_author raw_results type=%s value=%s", type(raw_results).__name__, str(raw_results)[:1000])
     results = _parse_results(raw_results)
-    logger.info("Hardcover search_author parsed results: %s", str(results)[:1000])
     if not results:
         return None
     hit = results[0]
@@ -124,24 +121,23 @@ async def get_author_books(api_key: str, author_slug: str) -> list[dict]:
 
 
 def _parse_results(raw) -> list[dict]:
-    """Parse jsonb results from Hardcover search. May be a JSON string, a list
-    of dicts, or a list of Typesense hit objects with a 'document' wrapper."""
+    """Parse jsonb results from Hardcover search.
+    Actual format: {"hits": [{"document": {...}}, ...], "found": N}
+    """
     if isinstance(raw, str):
         raw = json.loads(raw)
-    if not isinstance(raw, list):
-        return []
-    parsed = []
-    for item in raw:
-        if isinstance(item, str):
-            try:
-                item = json.loads(item)
-            except (json.JSONDecodeError, TypeError):
-                continue
-        if isinstance(item, dict):
-            # Typesense wraps results in {"document": {...}}
-            parsed.append(item.get('document', item))
-        # skip anything else
-    return parsed
+    # Typesense response is a dict with "hits" array
+    if isinstance(raw, dict):
+        hits = raw.get('hits', [])
+        return [h['document'] for h in hits if isinstance(h, dict) and 'document' in h]
+    # Fallback: if it's already a list
+    if isinstance(raw, list):
+        parsed = []
+        for item in raw:
+            if isinstance(item, dict):
+                parsed.append(item.get('document', item))
+        return parsed
+    return []
 
 
 async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dict]:
@@ -149,14 +145,11 @@ async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dic
     data = await _query(api_key, _SEARCH_IDS_QUERY, {
         'q': query, 'queryType': 'books', 'perPage': per_page,
     })
-    logger.info("Hardcover search_books raw response: %s", json.dumps(data, default=str)[:2000])
     raw_results = data.get('data', {}).get('search', {}).get('results', [])
-    logger.info("Hardcover search_books raw_results type=%s value=%s", type(raw_results).__name__, str(raw_results)[:1000])
     results = _parse_results(raw_results)
-    logger.info("Hardcover search_books parsed %d results", len(results))
     if not results:
         return []
-    ids = [r['id'] for r in results if isinstance(r, dict) and r.get('id')]
+    ids = [int(r['id']) for r in results if isinstance(r, dict) and r.get('id')]
     if not ids:
         return []
     books_data = await _query(api_key, _BOOKS_BY_IDS_QUERY, {'ids': ids})
@@ -260,7 +253,7 @@ class HardcoverProvider:
             results = _parse_results(raw_results)
             if not results:
                 return []
-            ids = [r['id'] for r in results if isinstance(r, dict) and r.get('id')]
+            ids = [int(r['id']) for r in results if isinstance(r, dict) and r.get('id')]
             if not ids:
                 return []
             # Step 2: fetch typed Book objects by ID
