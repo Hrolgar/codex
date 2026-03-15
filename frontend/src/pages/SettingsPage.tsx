@@ -14,6 +14,7 @@ import {
 } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import { useSettingsStore } from "@/hooks/useSettingsStore";
+import RootFoldersSection from "@/components/settings/RootFoldersSection";
 import {
   Settings as SettingsIcon,
   Search,
@@ -44,6 +45,7 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { id: "root-folders", label: "Root Folders", icon: FolderOpen },
   { id: "general", label: "General", icon: SettingsIcon },
   { id: "search-mode", label: "Search Mode", icon: Search },
   { id: "downloads", label: "Downloads", icon: Download },
@@ -1235,6 +1237,7 @@ export default function SettingsPage() {
 
   const renderContent = () => {
     switch (activeSection) {
+      case "root-folders": return <RootFoldersSection />;
       case "general": return <GeneralSection />;
       case "search-mode": return <SearchModeSection />;
       case "downloads": return <DownloadsSection />;

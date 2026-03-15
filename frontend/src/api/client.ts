@@ -434,3 +434,34 @@ export function toggleBookMonitored(bookId: string, monitored: boolean) {
   });
 }
 
+// Root Folders
+export interface RootFolder {
+  id: string;
+  name: string;
+  path: string;
+  media_type: string;
+  default: boolean;
+  free_space: number;
+  total_space: number;
+}
+
+export function getRootFolders() {
+  return request<RootFolder[]>("/root-folders");
+}
+
+export function addRootFolder(data: {
+  path: string;
+  media_type: string;
+  name?: string;
+  default?: boolean;
+}) {
+  return request<RootFolder>("/root-folders", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteRootFolder(id: string) {
+  return request<void>("/root-folders/" + id, { method: "DELETE" });
+}
+
