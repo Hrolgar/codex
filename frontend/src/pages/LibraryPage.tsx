@@ -14,6 +14,7 @@ export default function LibraryPage() {
   });
   const [search, setSearch] = useState("");
   const [mediaType, setMediaType] = useState("");
+  const [readFilter, setReadFilter] = useState("");
   const [page, setPage] = useState(1);
   const perPage = 24;
 
@@ -38,6 +39,12 @@ export default function LibraryPage() {
   }, []);
 
   const totalPages = data ? Math.ceil(data.total / perPage) : 0;
+
+  const filteredBooks = (data?.items ?? []).filter((b) => {
+    if (!readFilter) return true;
+    const status = b.reading_status ?? "unread";
+    return status === readFilter;
+  });
 
   // Empty library state
   if (!isLoading && data?.total === 0 && !search && !mediaType) {
@@ -99,7 +106,29 @@ export default function LibraryPage() {
         mediaType={mediaType}
       />
 
-      <BookGrid books={data?.items ?? []} isLoading={isLoading} />
+      {/* Read status filter */}
+      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1 w-fit">
+        {[
+          { value: "", label: "All" },
+          { value: "reading", label: "Reading" },
+          { value: "read", label: "Read" },
+          { value: "unread", label: "Unread" },
+        ].map((f) => (
+          <button
+            key={f.value}
+            onClick={() => { setReadFilter(f.value); setPage(1); }}
+            className={`px-3 py-1 rounded text-sm transition-colors ${
+              readFilter === f.value
+                ? "bg-indigo-500 text-white"
+                : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <BookGrid books={filteredBooks} isLoading={isLoading} />
 
       {/* Pagination */}
       {totalPages > 1 && (

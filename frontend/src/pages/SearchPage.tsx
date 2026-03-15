@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { searchExternal, createDownload } from "@/api/client";
+import { searchExternal, createDownload, addToWishlist } from "@/api/client";
 import type { SearchResult } from "@/api/client";
+import { useToast } from "@/contexts/ToastContext";
 import {
   Search,
   Download,
@@ -9,6 +10,7 @@ import {
   AlertCircle,
   Loader2,
   BookOpen,
+  Star,
 } from "lucide-react";
 
 export default function SearchPage() {
@@ -19,6 +21,24 @@ export default function SearchPage() {
     new Set()
   );
   const queryClient = useQueryClient();
+  const { addToast } = useToast();
+
+  const wishlistMutation = useMutation({
+    mutationFn: addToWishlist,
+    onSuccess: () => {
+      addToast("Added to wishlist");
+    },
+    onError: () => {
+      addToast("Failed to add to wishlist", "error");
+    },
+  });
+
+  const handleWishlist = (result: SearchResult) => {
+    wishlistMutation.mutate({
+      title: result.title,
+      author: result.author ?? "",
+    });
+  };
 
   // Debounce via ref to avoid re-renders on every keystroke
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -154,6 +174,7 @@ export default function SearchPage() {
                 key={`${result.title}-${result.source}-${idx}`}
                 result={result}
                 onDownload={handleDownload}
+                onWishlist={handleWishlist}
                 isDownloading={downloadingUrls.has(result.source ?? "")}
               />
             ))}
@@ -167,10 +188,12 @@ export default function SearchPage() {
 function SearchResultCard({
   result,
   onDownload,
+  onWishlist,
   isDownloading,
 }: {
   result: SearchResult;
   onDownload: (r: SearchResult) => void;
+  onWishlist: (r: SearchResult) => void;
   isDownloading: boolean;
 }) {
   return (
@@ -218,11 +241,11 @@ function SearchResultCard({
           {result.author ?? "Unknown author"}
         </p>
 
-        <div className="mt-auto pt-3">
+        <div className="mt-auto pt-3 flex gap-2">
           <button
             onClick={() => onDownload(result)}
             disabled={isDownloading || !result.source}
-            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isDownloading ? (
               <>
@@ -236,6 +259,16 @@ function SearchResultCard({
               </>
             )}
           </button>
+          {!result.owned && (
+            <button
+              onClick={() => onWishlist(result)}
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
+              title="Add to Wishlist"
+            >
+              <Star size={14} />
+              Wishlist
+            </button>
+          )}
         </div>
       </div>
     </div>
