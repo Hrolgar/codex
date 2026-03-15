@@ -1,8 +1,7 @@
 """Catalog service for managing monitored authors and their bibliographies."""
 
-# TODO: Implement Hardcover and Google Books catalog providers
-# Currently only OpenLibrary is supported for author catalog fetching.
-# When Hardcover provider is added, it should return audiobook data too.
+# TODO: Implement Google Books catalog provider
+# OpenLibrary and Hardcover are supported for author catalog fetching.
 
 import asyncio
 import logging
