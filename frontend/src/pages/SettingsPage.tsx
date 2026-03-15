@@ -8,9 +8,7 @@ import {
   getSystemStats,
   getSettings,
   updateSettings,
-  getProwlarrIndexers,
   type SettingsCategory,
-  type ProwlarrIndexer,
 } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -30,6 +28,8 @@ import {
   ChevronRight,
   Zap,
   Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 // --- Sidebar nav items ---

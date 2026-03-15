@@ -389,6 +389,16 @@ export function markNotificationRead(id: string) {
 // Reading status
 export type ReadingStatus = "unread" | "reading" | "read";
 
+export interface ProwlarrIndexer {
+  id: number;
+  name: string;
+  protocol: string;
+}
+
+export function getProwlarrIndexers() {
+  return request<ProwlarrIndexer[]>("/search/indexers");
+}
+
 export function updateBookStatus(id: string, status: ReadingStatus) {
   return request<{ status: string }>(`/books/${id}/status`, {
     method: "PUT",
