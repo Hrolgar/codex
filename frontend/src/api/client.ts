@@ -363,6 +363,7 @@ export interface Notification {
   id: string;
   title: string;
   message: string;
+  notification_type: "info" | "success" | "warning" | "error";
   read: boolean;
   created_at: string;
 }
@@ -372,7 +373,7 @@ export function getNotifications() {
 }
 
 export function markNotificationRead(id: string) {
-  return request<void>(`/notifications/${id}/read`, { method: "PUT" });
+  return request<void>(`/notifications/${id}/read`, { method: "POST" });
 }
 
 // Reading status

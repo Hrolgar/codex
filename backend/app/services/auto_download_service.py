@@ -91,9 +91,15 @@ async def check_wishlist_for_downloads(db: AsyncSession) -> int:
                     notification_type="success",
                 )
             except Exception:
-                logger.debug("Could not send notification for wishlist auto-download")
+                logger.warning("Could not send notification for wishlist auto-download")
 
         except Exception as e:
             logger.warning("Auto-download failed for %s: %s", item.search_title, e)
+            # Reset status so it can be retried next cycle
+            try:
+                item.status = "waiting"
+                await db.commit()
+            except Exception:
+                await db.rollback()
 
     return downloaded
