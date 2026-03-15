@@ -13,6 +13,7 @@ import {
   type ProwlarrIndexer,
 } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
+import { useSettingsStore } from "@/hooks/useSettingsStore";
 import {
   Settings as SettingsIcon,
   Search,
@@ -573,11 +574,19 @@ function DownloadsSection() {
   );
 }
 
-function MetadataProviderSection({ title, description, linkUrl }: { provider?: string; title: string; description: string; linkUrl?: string }) {
+function MetadataProviderSection({ provider, title, description, linkUrl }: { provider: string; title: string; description: string; linkUrl?: string }) {
+  const ss = useSettingsStore();
+  const prefix = "metadata." + provider;
   const [enabled, setEnabled] = useState(false);
   const [apiKeyVal, setApiKeyVal] = useState("");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ss.loaded) return;
+    setEnabled(ss.getBool(prefix + ".enabled"));
+    setApiKeyVal(ss.get(prefix + ".api_key"));
+  }, [ss.loaded, prefix]);
 
   const handleTest = async () => {
     setTesting(true);
@@ -615,6 +624,8 @@ function MetadataProviderSection({ title, description, linkUrl }: { provider?: s
 }
 
 function ProwlarrSection() {
+  const ss = useSettingsStore();
+  const { addToast } = useToast();
   const [enabled, setEnabled] = useState(false);
   const [prowlarrUrl, setProwlarrUrl] = useState("");
   const [prowlarrKey, setProwlarrKey] = useState("");
@@ -624,6 +635,14 @@ function ProwlarrSection() {
   const [indexers, setIndexers] = useState<ProwlarrIndexer[]>([]);
   const [selectedIndexers, setSelectedIndexers] = useState<Set<number>>(new Set());
   const [loadingIndexers, setLoadingIndexers] = useState(false);
+
+  // Load saved values
+  useEffect(() => {
+    if (!ss.loaded) return;
+    setEnabled(ss.getBool("prowlarr.enabled"));
+    setProwlarrUrl(ss.get("prowlarr.url"));
+    setProwlarrKey(ss.get("prowlarr.api_key"));
+  }, [ss.loaded]);
 
   const handleTest = async () => {
     setTesting(true);
@@ -721,6 +740,15 @@ function ProwlarrSection() {
             <p className="text-sm text-gray-500">No indexers found in Prowlarr.</p>
           )}
           <Toggle checked={true} onChange={() => {}} label="Auto-expand search on no results" description="Automatically retry search without category filtering if no results are found" />
+          <button
+            onClick={() => {
+              ss.save({ "prowlarr.enabled": String(enabled), "prowlarr.url": prowlarrUrl, "prowlarr.api_key": prowlarrKey });
+              addToast("Prowlarr settings saved");
+            }}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            Save
+          </button>
         </>
       )}
     </SettingsSection>
@@ -730,6 +758,7 @@ function ProwlarrSection() {
 function DownloadClientsSection() {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
+  const ss = useSettingsStore();
 
   // qBittorrent state
   const [qbtEnabled, setQbtEnabled] = useState(false);
@@ -752,34 +781,23 @@ function DownloadClientsSection() {
   const [sabTesting, setSabTesting] = useState(false);
   const [sabTestResult, setSabTestResult] = useState<string | null>(null);
 
-  // Load saved settings
-  const { data: settingsCategories } = useQuery({
-    queryKey: ["settings"],
-    queryFn: getSettings,
-  });
-
+  // Load saved settings via useSettingsStore
   useEffect(() => {
-    if (!settingsCategories) return;
-    const allSettings: Record<string, string> = {};
-    for (const cat of settingsCategories) {
-      for (const s of cat.settings) {
-        allSettings[s.key] = s.value ?? "";
-      }
-    }
-    if (allSettings["downloadclient.qbittorrent.enabled"] === "true") setQbtEnabled(true);
-    if (allSettings["downloadclient.qbittorrent.url"]) setQbtUrl(allSettings["downloadclient.qbittorrent.url"]);
-    if (allSettings["downloadclient.qbittorrent.username"]) setQbtUsername(allSettings["downloadclient.qbittorrent.username"]);
-    if (allSettings["downloadclient.qbittorrent.password"]) setQbtPassword(allSettings["downloadclient.qbittorrent.password"]);
-    if (allSettings["downloadclient.qbittorrent.category.ebook"]) setQbtCategoryEbook(allSettings["downloadclient.qbittorrent.category.ebook"]);
-    if (allSettings["downloadclient.qbittorrent.category.audiobook"]) setQbtCategoryAudiobook(allSettings["downloadclient.qbittorrent.category.audiobook"]);
-    if (allSettings["downloadclient.qbittorrent.category.comic"]) setQbtCategoryComic(allSettings["downloadclient.qbittorrent.category.comic"]);
-    if (allSettings["downloadclient.sabnzbd.enabled"] === "true") setSabEnabled(true);
-    if (allSettings["downloadclient.sabnzbd.url"]) setSabUrl(allSettings["downloadclient.sabnzbd.url"]);
-    if (allSettings["downloadclient.sabnzbd.api_key"]) setSabApiKey(allSettings["downloadclient.sabnzbd.api_key"]);
-    if (allSettings["downloadclient.sabnzbd.category.ebook"]) setSabCategoryEbook(allSettings["downloadclient.sabnzbd.category.ebook"]);
-    if (allSettings["downloadclient.sabnzbd.category.audiobook"]) setSabCategoryAudiobook(allSettings["downloadclient.sabnzbd.category.audiobook"]);
-    if (allSettings["downloadclient.sabnzbd.category.comic"]) setSabCategoryComic(allSettings["downloadclient.sabnzbd.category.comic"]);
-  }, [settingsCategories]);
+    if (!ss.loaded) return;
+    setQbtEnabled(ss.getBool("downloadclient.qbittorrent.enabled"));
+    setQbtUrl(ss.get("downloadclient.qbittorrent.url"));
+    setQbtUsername(ss.get("downloadclient.qbittorrent.username"));
+    setQbtPassword(ss.get("downloadclient.qbittorrent.password"));
+    setQbtCategoryEbook(ss.get("downloadclient.qbittorrent.category.ebook", "codex-books"));
+    setQbtCategoryAudiobook(ss.get("downloadclient.qbittorrent.category.audiobook", "codex-audiobooks"));
+    setQbtCategoryComic(ss.get("downloadclient.qbittorrent.category.comic", "codex-comics"));
+    setSabEnabled(ss.getBool("downloadclient.sabnzbd.enabled"));
+    setSabUrl(ss.get("downloadclient.sabnzbd.url"));
+    setSabApiKey(ss.get("downloadclient.sabnzbd.api_key"));
+    setSabCategoryEbook(ss.get("downloadclient.sabnzbd.category.ebook", "codex-books"));
+    setSabCategoryAudiobook(ss.get("downloadclient.sabnzbd.category.audiobook", "codex-audiobooks"));
+    setSabCategoryComic(ss.get("downloadclient.sabnzbd.category.comic", "codex-comics"));
+  }, [ss.loaded]);
 
   const saveMutation = useMutation({
     mutationFn: (settings: Record<string, string>) => updateSettings(settings),
