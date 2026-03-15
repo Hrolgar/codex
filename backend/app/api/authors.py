@@ -22,6 +22,41 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/search")
+async def search_authors_external(
+    q: str = Query(..., min_length=2),
+    db: AsyncSession = Depends(get_db),
+):
+    import httpx
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(
+            "https://openlibrary.org/search/authors.json",
+            params={"q": q, "limit": 8},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    # Get existing author names to exclude
+    existing = await db.execute(select(Author.name))
+    existing_names = {r[0].lower() for r in existing}
+
+    results = []
+    for doc in data.get("docs", []):
+        name = doc.get("name", "")
+        if name.lower() in existing_names:
+            continue
+        results.append(
+            {
+                "name": name,
+                "key": doc.get("key", ""),
+                "work_count": doc.get("work_count", 0),
+                "top_work": doc.get("top_work", ""),
+            }
+        )
+    return results[:6]
+
+
 @router.get("")
 async def list_authors(
     search: str | None = Query(None, description="Filter authors by name"),

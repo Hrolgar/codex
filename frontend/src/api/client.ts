@@ -147,6 +147,19 @@ export interface SettingsCategory {
   settings: SettingItem[];
 }
 
+export interface ExternalAuthor {
+  name: string;
+  key: string;
+  work_count: number;
+  top_work: string;
+}
+
+export function searchAuthorsExternal(q: string) {
+  return request<ExternalAuthor[]>(
+    "/authors/search?q=" + encodeURIComponent(q),
+  );
+}
+
 // API functions
 export function getHealth() {
   return request<{ status: string }>("/health");
