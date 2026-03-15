@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.matching import escape_like
 from app.database import async_session, get_db
 from app.models import Author, Book, BookAuthor, LibraryItem, Series, SeriesBook
+from app.models.edition import Edition
 from app.schemas.author import (
     AuthorBookListItem,
     AuthorCreate,
@@ -216,6 +217,31 @@ async def get_author(author_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         .order_by(Book.title)
     )
     standalone_result = await db.execute(standalone_stmt)
+    standalone_rows = list(standalone_result)
+
+    # Fetch editions for all standalone books in one query
+    standalone_book_ids = [row.id for row in standalone_rows]
+    editions_by_book: dict[uuid.UUID, list[dict]] = {}
+    if standalone_book_ids:
+        editions_stmt = select(Edition).where(Edition.book_id.in_(standalone_book_ids))
+        editions_result = await db.execute(editions_stmt)
+        for ed in editions_result.scalars():
+            # Check if this edition is owned (has a LibraryItem)
+            owned_check = await db.execute(
+                select(func.count(LibraryItem.id)).where(
+                    LibraryItem.book_id == ed.book_id,
+                    LibraryItem.edition_id == ed.id,
+                )
+            )
+            ed_owned = (owned_check.scalar() or 0) > 0
+            editions_by_book.setdefault(ed.book_id, []).append({
+                "id": str(ed.id),
+                "language": ed.language,
+                "format": ed.format,
+                "media_type": ed.media_type,
+                "owned": ed_owned,
+            })
+
     standalone_books = [
         AuthorBookListItem(
             id=row.id,
@@ -227,8 +253,9 @@ async def get_author(author_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
             publish_year=row.publish_year,
             owned=(row.owned_count or 0) > 0,
             monitored=row.book_monitored,
+            editions=editions_by_book.get(row.id, []),
         )
-        for row in standalone_result
+        for row in standalone_rows
     ]
 
     # Group standalone books by media_type

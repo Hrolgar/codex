@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Author, Book
+from app.models.edition import Edition
 from app.metadata.openlibrary import get_cover_url
 from app.services.duplicate_service import check_duplicate
 from app.services.entity_service import (
@@ -98,9 +99,9 @@ def _work_matches_language(entry: dict, editions: list[dict], allowed: set[str])
             if code in allowed:
                 return True
 
-    # No language info at all — include the work (don't exclude unknowns)
+    # No language info at all — exclude when filtering is active
     if not work_langs and not any(ed.get("languages") for ed in editions):
-        return True
+        return False
 
     # Had language info but none matched
     return False
@@ -278,8 +279,8 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                                 if code in allowed_languages:
                                     has_match = True
                                     break
-                        # No language info at all — keep the book
-                        if not has_match and (book_lang or work_langs):
+                        # No match — exclude (unknown language = exclude)
+                        if not has_match:
                             existing_by_key.monitored = False
                             excluded_languages += 1
                             continue
@@ -389,6 +390,19 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                     monitored=True,
                 )
                 db.add(book)
+                await db.flush()
+
+                # Auto-create edition slots for each enabled language
+                languages_raw = await get_setting(db, 'general.languages')
+                languages = [l.strip() for l in (languages_raw or 'en').split(',') if l.strip()]
+                for lang in languages:
+                    edition = Edition(
+                        book_id=book.id,
+                        language=lang,
+                        format='epub',
+                        media_type=book.media_type or 'ebook',
+                    )
+                    db.add(edition)
                 await db.flush()
 
                 await link_book_author(db, book.id, author.id)

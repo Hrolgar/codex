@@ -28,6 +28,7 @@ class AuthorSeriesBrief(BaseModel):
 class AuthorBookListItem(BookListItem):
     owned: bool = False
     monitored: bool = True
+    editions: list[dict] = []
 
 
 class AuthorMediaGroup(BaseModel):
