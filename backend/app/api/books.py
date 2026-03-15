@@ -72,3 +72,17 @@ async def update_read_status(
     await db.commit()
     await db.refresh(book)
     return {"id": str(book.id), "read_status": book.read_status, "date_read": book.date_read}
+
+
+@router.put("/{book_id}/monitored")
+async def toggle_book_monitored(
+    book_id: uuid.UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    book = await db.get(Book, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    book.monitored = body.get("monitored", True)
+    await db.commit()
+    return {"id": str(book.id), "monitored": book.monitored}

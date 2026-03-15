@@ -27,7 +27,7 @@ class Book(Base):
     isbn_13: Mapped[str | None] = mapped_column(String(13), index=True)
     asin: Mapped[str | None] = mapped_column(String(10), index=True)
     openlibrary_key: Mapped[str | None] = mapped_column(String(50))
-    monitored: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    monitored: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     metadata_source: Mapped[str | None] = mapped_column(String(50))
     read_status: Mapped[str] = mapped_column(String(20), default="unread", server_default="unread")  # unread | reading | read
     date_read: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

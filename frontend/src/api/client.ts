@@ -414,6 +414,13 @@ export function getProwlarrIndexers() {
   return request<ProwlarrIndexer[]>("/search/indexers");
 }
 
+export function toggleBookMonitored(bookId: string, monitored: boolean) {
+  return request<{ id: string; monitored: boolean }>("/books/" + bookId + "/monitored", {
+    method: "PUT",
+    body: JSON.stringify({ monitored }),
+  });
+}
+
 export function updateBookStatus(id: string, status: ReadingStatus) {
   return request<{ status: string }>(`/books/${id}/status`, {
     method: "PUT",
