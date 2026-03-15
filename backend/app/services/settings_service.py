@@ -16,6 +16,8 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     "prowlarr.enabled": ("Prowlarr Enabled", "Enable Prowlarr as an indexer", "prowlarr", False),
     "prowlarr.url": ("Prowlarr URL", "Base URL of your Prowlarr instance", "prowlarr", False),
     "prowlarr.api_key": ("API Key", "Prowlarr API key", "prowlarr", True),
+    "prowlarr.indexers": ("Prowlarr Indexers", "Cached indexer list from Prowlarr (JSON)", "prowlarr", False),
+    "prowlarr.selected_indexers": ("Prowlarr Selected Indexers", "Selected indexer IDs (JSON array)", "prowlarr", False),
 
     # Download clients – qBittorrent
     "downloadclient.qbittorrent.enabled": ("qBittorrent Enabled", "Enable qBittorrent as a download client", "downloadclient", False),
@@ -92,6 +94,8 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "prowlarr.enabled": "false",
     "prowlarr.url": "",
     "prowlarr.api_key": "",
+    "prowlarr.indexers": "",
+    "prowlarr.selected_indexers": "",
     # Download clients – qBittorrent
     "downloadclient.qbittorrent.enabled": "false",
     "downloadclient.qbittorrent.url": "",

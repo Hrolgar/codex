@@ -672,6 +672,25 @@ function ProwlarrSection() {
     }
   }, [ss.loaded]);
 
+  // Auto-fetch indexers on mount if Prowlarr is already configured
+  useEffect(() => {
+    if (!ss.loaded) return;
+    const isEnabled = ss.getBool('prowlarr.enabled');
+    const hasUrl = !!ss.get('prowlarr.url');
+    const hasKey = !!ss.get('prowlarr.api_key');
+    if (isEnabled && hasUrl && hasKey) {
+      setConnected(true);
+      setLoadingIndexers(true);
+      getProwlarrIndexers()
+        .then((data) => {
+          setIndexers(data);
+          setLoadingIndexers(false);
+          ss.save({ 'prowlarr.indexers': JSON.stringify(data) });
+        })
+        .catch(() => { setLoadingIndexers(false); });
+    }
+  }, [ss.loaded]);
+
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
@@ -783,7 +802,7 @@ function ProwlarrSection() {
           <Toggle checked={true} onChange={() => {}} label="Auto-expand search on no results" description="Automatically retry search without category filtering if no results are found" />
           <button
             onClick={() => {
-              ss.save({ "prowlarr.enabled": String(enabled), "prowlarr.url": prowlarrUrl, "prowlarr.api_key": prowlarrKey });
+              ss.save({ "prowlarr.enabled": String(enabled), "prowlarr.url": prowlarrUrl, "prowlarr.api_key": prowlarrKey, "prowlarr.selected_indexers": JSON.stringify([...selectedIndexers]) });
               addToast("Prowlarr settings saved");
             }}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
