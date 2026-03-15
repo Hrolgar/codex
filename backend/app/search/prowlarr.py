@@ -1,4 +1,4 @@
-"""Prowlarr search provider for ebooks and audiobooks."""
+"""Prowlarr search provider for ebooks, audiobooks, and comics."""
 from __future__ import annotations
 
 import re
@@ -10,10 +10,12 @@ from app.schemas.search import SearchResult
 # Prowlarr category IDs
 CAT_EBOOKS = 7020
 CAT_AUDIOBOOKS = 7030
+CAT_COMICS = 7040
 
 MEDIA_TYPE_CATEGORIES = {
     "ebook": [CAT_EBOOKS],
     "audiobook": [CAT_AUDIOBOOKS],
+    "comic": [CAT_COMICS],
 }
 
 
@@ -41,6 +43,15 @@ def _parse_title_author(raw: str) -> tuple[str, str | None]:
     return raw.strip(), None
 
 
+def _detect_format(title: str) -> str | None:
+    """Detect file format from the result title."""
+    title_lower = title.lower()
+    for fmt in ('epub', 'mobi', 'azw3', 'pdf', 'cbz', 'cbr', 'm4b', 'mp3', 'flac'):
+        if fmt in title_lower:
+            return fmt
+    return None
+
+
 async def search_prowlarr(
     base_url: str,
     api_key: str,
@@ -48,7 +59,9 @@ async def search_prowlarr(
     media_type: str | None = None,
 ) -> list[SearchResult]:
     """Search Prowlarr for books/audiobooks and return SearchResult list."""
-    categories = MEDIA_TYPE_CATEGORIES.get(media_type, [CAT_EBOOKS, CAT_AUDIOBOOKS])
+    categories = MEDIA_TYPE_CATEGORIES.get(
+        media_type, [CAT_EBOOKS, CAT_AUDIOBOOKS, CAT_COMICS]
+    )
 
     url = f"{base_url.rstrip('/')}/api/v1/search"
     params = {"query": query, "categories": categories}
@@ -66,6 +79,7 @@ async def search_prowlarr(
             continue
 
         title, author = _parse_title_author(raw_title)
+        fmt = _detect_format(raw_title)
         source = item.get("indexer", "prowlarr")
 
         # Try to extract ISBN from infoUrl or guid if present
@@ -90,6 +104,7 @@ async def search_prowlarr(
                 isbn=isbn,
                 source=source,
                 download_url=download_url,
+                format=fmt,
                 owned=False,
                 match_confidence=0.0,
                 indexer=source,
