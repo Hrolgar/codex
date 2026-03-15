@@ -509,7 +509,7 @@ function DownloadsSection() {
     <SettingsSection title="Downloads" description="Configure where downloaded files are saved and how they're organized.">
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Books</h3>
-        <p className="text-xs text-gray-500 -mt-2">Configure where ebooks, comics, and magazines are saved.</p>
+        <p className="text-xs text-gray-500 -mt-2">Configure where ebooks and magazines are saved.</p>
         <Field label="Destination" required description="Directory where downloaded book files are saved.">
           <input type="text" defaultValue="/downloads/books" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
         </Field>
@@ -562,9 +562,11 @@ function DownloadsSection() {
             <option value="rename">Rename and Organize</option>
           </select>
         </Field>
-        <Field label="Path Template" description="Use / to create folders. Variables: {Author}, {Title}, {Year}, {Series}, {SeriesPosition}, {OriginalName}.">
-          <input type="text" defaultValue="{Author}/{Series?{Series}/}{Title}" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500 font-mono text-xs" />
-        </Field>
+        <PathTemplateField
+          label="Path Template"
+          description="Use / to create folders. Wrap sections in {Series?...} to only include them when a series exists."
+          defaultValue="{Author}/{Series?{Series}/}{Title}"
+        />
         <Toggle checked={true} onChange={() => {}} label="Hardlink Comics Torrents" description="Create hardlinks instead of copying. Preserves seeding but archives won't be extracted." />
       </div>
     </SettingsSection>
