@@ -72,7 +72,66 @@ def _get_disk_usage(path: str) -> tuple[int | None, int | None]:
         return None, None
 
 
+class BrowseDirectoryEntry(BaseModel):
+    name: str
+    path: str
+
+
+class BrowseResponse(BaseModel):
+    current_path: str
+    parent: str | None
+    directories: list[BrowseDirectoryEntry]
+
+
+def _is_blocked_path(real_path: str) -> bool:
+    """Check if a resolved path falls under a blocked prefix."""
+    for blocked in _BLOCKED_PREFIXES:
+        if real_path == blocked or real_path.startswith(blocked + '/'):
+            return True
+    return False
+
+
 # --- Endpoints ---
+
+@router.get("/browse", response_model=BrowseResponse)
+async def browse_directories(path: str = "/"):
+    """List directories at the given path for the folder browser UI."""
+    real = os.path.realpath(path)
+
+    if _is_blocked_path(real):
+        raise HTTPException(status_code=403, detail="Access to this path is restricted.")
+
+    if not os.path.isdir(real):
+        raise HTTPException(status_code=404, detail="Path does not exist or is not a directory.")
+
+    parent = os.path.dirname(real) if real != "/" else None
+    if parent is not None and _is_blocked_path(parent):
+        parent = None
+
+    directories: list[BrowseDirectoryEntry] = []
+    try:
+        with os.scandir(real) as entries:
+            for entry in entries:
+                try:
+                    if not entry.is_dir(follow_symlinks=True):
+                        continue
+                    entry_real = os.path.realpath(entry.path)
+                    if _is_blocked_path(entry_real):
+                        continue
+                    directories.append(BrowseDirectoryEntry(name=entry.name, path=entry_real))
+                except (PermissionError, OSError):
+                    continue
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied reading this directory.")
+
+    directories.sort(key=lambda d: d.name.lower())
+
+    return BrowseResponse(
+        current_path=real,
+        parent=parent,
+        directories=directories,
+    )
+
 
 @router.get("", response_model=list[RootFolderResponse])
 async def list_root_folders(db: AsyncSession = Depends(get_db)):
