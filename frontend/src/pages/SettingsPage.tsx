@@ -591,10 +591,24 @@ function MetadataProviderSection({ provider, title, description, linkUrl }: { pr
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
-    setTimeout(() => {
+    try {
+      // Save current values first so backend can read them
+      await ss.save({
+        [prefix + '.enabled']: String(enabled),
+        [prefix + '.api_key']: apiKeyVal,
+      });
+      const res = await fetch(`/api/system/settings/test-connection?provider=${provider}`);
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok) {
+        setTestResult(data.message ?? "Connected");
+      } else {
+        setTestResult(data?.message ?? "Connection failed");
+      }
+    } catch {
+      setTestResult("Connection failed");
+    } finally {
       setTesting(false);
-      setTestResult(apiKeyVal ? "Connected" : "API key required");
-    }, 1000);
+    }
   };
 
   return (
@@ -650,6 +664,12 @@ function ProwlarrSection() {
     setConnected(false);
     setIndexers([]);
     try {
+      // Save current values first so backend can read them
+      await ss.save({
+        'prowlarr.enabled': String(enabled),
+        'prowlarr.url': prowlarrUrl,
+        'prowlarr.api_key': prowlarrKey,
+      });
       const res = await fetch("/api/system/settings/test-connection?provider=prowlarr");
       const data = await res.json().catch(() => null);
       if (res.ok && data?.ok) {
@@ -837,6 +857,27 @@ function DownloadClientsSection() {
     setTesting(true);
     setResult(null);
     try {
+      // Save current values first so backend can read them
+      if (provider === "qbittorrent") {
+        await ss.save({
+          'downloadclient.qbittorrent.enabled': String(qbtEnabled),
+          'downloadclient.qbittorrent.url': qbtUrl,
+          'downloadclient.qbittorrent.username': qbtUsername,
+          'downloadclient.qbittorrent.password': qbtPassword,
+          'downloadclient.qbittorrent.category.ebook': qbtCategoryEbook,
+          'downloadclient.qbittorrent.category.audiobook': qbtCategoryAudiobook,
+          'downloadclient.qbittorrent.category.comic': qbtCategoryComic,
+        });
+      } else {
+        await ss.save({
+          'downloadclient.sabnzbd.enabled': String(sabEnabled),
+          'downloadclient.sabnzbd.url': sabUrl,
+          'downloadclient.sabnzbd.api_key': sabApiKey,
+          'downloadclient.sabnzbd.category.ebook': sabCategoryEbook,
+          'downloadclient.sabnzbd.category.audiobook': sabCategoryAudiobook,
+          'downloadclient.sabnzbd.category.comic': sabCategoryComic,
+        });
+      }
       const res = await fetch(`/api/system/settings/test-connection?provider=${provider}`);
       if (res.ok) {
         setResult("Connection successful");
