@@ -1093,33 +1093,28 @@ function DownloadClientsSection() {
 
 function SearchModeSection() {
   const ss = useSettingsStore();
+  const { addToast } = useToast();
   const [mode, setMode] = useState("universal");
   const [bookProvider, setBookProvider] = useState("openlibrary");
   const [audiobookProvider, setAudiobookProvider] = useState("book");
   const [defaultSource, setDefaultSource] = useState("prowlarr");
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (ss.loaded) {
-      setMode(ss.get("search.mode", "universal"));
-      setBookProvider(ss.get("search.book_provider", "openlibrary"));
-      setAudiobookProvider(ss.get("search.audiobook_provider", "book"));
-      setDefaultSource(ss.get("search.default_source", "prowlarr"));
-    }
-  }, [ss.loaded, ss.get]);
+    if (!ss.loaded) return;
+    setMode(ss.get("search.mode", "universal"));
+    setBookProvider(ss.get("search.book_provider", "openlibrary"));
+    setAudiobookProvider(ss.get("search.audiobook_provider", "book"));
+    setDefaultSource(ss.get("search.default_source", "prowlarr"));
+  }, [ss.loaded]);
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await ss.save({
-        "search.mode": mode,
-        "search.book_provider": bookProvider,
-        "search.audiobook_provider": audiobookProvider,
-        "search.default_source": defaultSource,
-      });
-    } finally {
-      setSaving(false);
-    }
+  const handleSave = () => {
+    ss.save({
+      "search.mode": mode,
+      "search.book_provider": bookProvider,
+      "search.audiobook_provider": audiobookProvider,
+      "search.default_source": defaultSource,
+    });
+    addToast("Search settings saved");
   };
 
   const selectClass = "w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500";
@@ -1153,8 +1148,8 @@ function SearchModeSection() {
           <option value="audiobookbay">AudiobookBay</option>
         </select>
       </Field>
-      <button onClick={handleSave} disabled={saving} className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
-        {saving ? "Saving..." : "Save"}
+      <button onClick={handleSave} className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+        Save
       </button>
     </SettingsSection>
   );
@@ -1195,11 +1190,11 @@ function IntegrationCategory({ category, queryClient }: { category: SettingsCate
 
 function AdvancedSection({ categories }: { categories: SettingsCategory[] | undefined }) {
   const queryClient = useQueryClient();
-  const HANDLED_CATEGORIES = ['prowlarr', 'hardcover', 'openlibrary', 'google', 'google_books', 'metadata', 'general', 'downloads', 'downloadclient', 'audiobookshelf', 'search'];
+  const HANDLED_CATEGORIES = ['prowlarr', 'metadata', 'general', 'downloads', 'downloadclient', 'audiobookshelf', 'search'];
   const filtered = categories?.filter(cat => !HANDLED_CATEGORIES.includes(cat.category));
   return (
     <SettingsSection title="Advanced" description="Integration settings stored in the database.">
-      {filtered?.length ? filtered.map((cat) => <IntegrationCategory key={cat.category} category={cat} queryClient={queryClient} />) : <p className="text-sm text-gray-500">No integration settings configured.</p>}
+      {filtered?.length ? filtered.map((cat) => <IntegrationCategory key={cat.category} category={cat} queryClient={queryClient} />) : <p className="text-sm text-gray-500">No additional settings. All settings are managed in their dedicated sections above.</p>}
     </SettingsSection>
   );
 }
