@@ -529,8 +529,10 @@ const TOKEN_HELP_ROWS: [string, string][] = [
   ["{Series?...}", "Conditional: only renders if series exists"],
 ];
 
-function PathTemplateField({ label, description, defaultValue }: { label: string; description: string; defaultValue: string }) {
-  const [value, setValue] = useState(defaultValue);
+function PathTemplateField({ label, description, defaultValue, value: controlledValue, onChange }: { label: string; description: string; defaultValue?: string; value?: string; onChange?: (v: string) => void }) {
+  const [internalValue, setInternalValue] = useState(defaultValue ?? '');
+  const value = controlledValue !== undefined ? controlledValue : internalValue;
+  const setValue = onChange ?? setInternalValue;
   const [showHelp, setShowHelp] = useState(false);
 
   const seriesPreview = renderTemplatePreview(value, SERIES_SAMPLE);
@@ -1190,7 +1192,7 @@ function IntegrationCategory({ category, queryClient }: { category: SettingsCate
 
 function AdvancedSection({ categories }: { categories: SettingsCategory[] | undefined }) {
   const queryClient = useQueryClient();
-  const HANDLED_CATEGORIES = ['prowlarr', 'metadata', 'general', 'downloads', 'downloadclient', 'audiobookshelf', 'search'];
+  const HANDLED_CATEGORIES = ['prowlarr', 'metadata', 'general', 'downloads', 'downloadclient', 'audiobookshelf', 'search', 'auto_download'];
   const filtered = categories?.filter(cat => !HANDLED_CATEGORIES.includes(cat.category));
   return (
     <SettingsSection title="Advanced" description="Integration settings stored in the database.">
