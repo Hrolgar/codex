@@ -1,3 +1,4 @@
+import json
 import logging
 
 import httpx
@@ -74,7 +75,8 @@ async def search_author(api_key: str, name: str) -> dict | None:
     data = await _query(api_key, _SEARCH_IDS_QUERY, {
         'q': name, 'queryType': 'authors', 'perPage': 1,
     })
-    results = data.get('data', {}).get('search', {}).get('results', [])
+    raw_results = data.get('data', {}).get('search', {}).get('results', [])
+    results = _parse_results(raw_results)
     if not results:
         return None
     hit = results[0]
@@ -118,15 +120,37 @@ async def get_author_books(api_key: str, author_slug: str) -> list[dict]:
     return authors[0].get('books', [])
 
 
+def _parse_results(raw) -> list[dict]:
+    """Parse jsonb results from Hardcover search. May be a JSON string, a list
+    of dicts, or a list of Typesense hit objects with a 'document' wrapper."""
+    if isinstance(raw, str):
+        raw = json.loads(raw)
+    if not isinstance(raw, list):
+        return []
+    parsed = []
+    for item in raw:
+        if isinstance(item, str):
+            try:
+                item = json.loads(item)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        if isinstance(item, dict):
+            # Typesense wraps results in {"document": {...}}
+            parsed.append(item.get('document', item))
+        # skip anything else
+    return parsed
+
+
 async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dict]:
     """Two-step search: get IDs from jsonb results, then fetch typed Book objects."""
     data = await _query(api_key, _SEARCH_IDS_QUERY, {
         'q': query, 'queryType': 'books', 'perPage': per_page,
     })
-    results = data.get('data', {}).get('search', {}).get('results', [])
+    raw_results = data.get('data', {}).get('search', {}).get('results', [])
+    results = _parse_results(raw_results)
     if not results:
         return []
-    ids = [r['id'] for r in results if r.get('id')]
+    ids = [r['id'] for r in results if isinstance(r, dict) and r.get('id')]
     if not ids:
         return []
     books_data = await _query(api_key, _BOOKS_BY_IDS_QUERY, {'ids': ids})
@@ -226,10 +250,11 @@ class HardcoverProvider:
             data = await _query(self.api_key, _SEARCH_IDS_QUERY, {
                 'q': query_str, 'queryType': 'books', 'perPage': 10,
             })
-            results = data.get("data", {}).get("search", {}).get("results", [])
+            raw_results = data.get("data", {}).get("search", {}).get("results", [])
+            results = _parse_results(raw_results)
             if not results:
                 return []
-            ids = [r['id'] for r in results if r.get('id')]
+            ids = [r['id'] for r in results if isinstance(r, dict) and r.get('id')]
             if not ids:
                 return []
             # Step 2: fetch typed Book objects by ID
