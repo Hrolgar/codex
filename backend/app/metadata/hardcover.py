@@ -10,6 +10,9 @@ HARDCOVER_URL = 'https://api.hardcover.app/v1/graphql'
 
 
 async def _query(api_key: str, query: str, variables: dict | None = None) -> dict:
+    # Strip 'Bearer ' prefix if user pasted it with the token
+    if api_key.startswith('Bearer '):
+        api_key = api_key[7:]
     headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
     body = {'query': query}
     if variables:
