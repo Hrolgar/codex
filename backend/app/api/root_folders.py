@@ -205,6 +205,28 @@ async def create_root_folder(data: RootFolderCreate, db: AsyncSession = Depends(
     )
 
 
+@router.post("/scan-all", status_code=202)
+async def trigger_scan_all(db: AsyncSession = Depends(get_db)):
+    """Trigger an immediate rescan of ALL root folders (sequential)."""
+    result = await db.execute(select(RootFolder))
+    folders = result.scalars().all()
+    if not folders:
+        raise HTTPException(status_code=404, detail="No root folders configured")
+
+    async def _scan_all_sequential(folder_ids: list):
+        for fid in folder_ids:
+            try:
+                await run_scan(fid)
+            except Exception:
+                logger.warning("scan-all: failed for folder %s", fid, exc_info=True)
+
+    folder_ids = [f.id for f in folders]
+    task = asyncio.create_task(_scan_all_sequential(folder_ids))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return {"status": "scanning", "folder_count": len(folder_ids)}
+
+
 @router.post("/{folder_id}/scan", status_code=202)
 async def trigger_scan(folder_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     """Manually trigger a re-scan of a root folder."""

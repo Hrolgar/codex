@@ -96,6 +96,9 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     # Catalog
     "catalog.refresh_interval_hours": ("Refresh Interval (hours)", "How often to refresh monitored author catalogs (default: 24)", "catalog", False),
 
+    # Scan
+    "scan.interval_hours": ("Rescan Interval (hours)", "Hours between automatic library rescans", "scan", False),
+
     # Notifications
     "notifications.discord_webhook_url": ("Discord Webhook URL", "Discord webhook URL for sending notifications", "notifications", False),
 }
@@ -166,6 +169,8 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "search.book_provider": "openlibrary",
     "search.audiobook_provider": "book",
     "search.default_source": "prowlarr",
+    # Scan
+    "scan.interval_hours": "24",
 }
 
 

@@ -121,13 +121,40 @@ async def lifespan(app: FastAPI):
             except Exception:
                 logger.warning("Catalog refresh periodic task error", exc_info=True)
 
+    async def _root_folder_scan_loop():
+        """Periodically rescan all root folders."""
+        while True:
+            interval = await _get_interval("scan.interval_hours", 24)
+            await asyncio.sleep(interval * 3600)
+            try:
+                async with async_session() as db:
+                    from sqlalchemy import select
+                    from app.models.root_folder import RootFolder
+                    from app.services.scanner_service import run_scan
+
+                    result = await db.execute(select(RootFolder))
+                    folders = result.scalars().all()
+                    logger.info("Auto-rescan: starting scan of %d root folder(s)", len(folders))
+                    for folder in folders:
+                        try:
+                            logger.info("Auto-rescan: scanning '%s' (%s)", folder.name, folder.id)
+                            await run_scan(folder.id)
+                            logger.info("Auto-rescan: completed '%s'", folder.name)
+                        except Exception:
+                            logger.warning("Auto-rescan: failed for '%s'", folder.name, exc_info=True)
+                    logger.info("Auto-rescan: finished all folders")
+            except Exception:
+                logger.warning("Auto-rescan periodic task error", exc_info=True)
+
     auto_dl_task = asyncio.create_task(_auto_download_loop())
     catalog_task = asyncio.create_task(_catalog_refresh_loop())
+    scan_task = asyncio.create_task(_root_folder_scan_loop())
 
     yield
     task.cancel()
     auto_dl_task.cancel()
     catalog_task.cancel()
+    scan_task.cancel()
     await engine.dispose()
 
 
