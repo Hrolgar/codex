@@ -59,7 +59,8 @@ def _infer_from_directory(root: Path, full_path: Path, item: ScannedItem) -> Non
     except ValueError:
         return
     parts = relative.parent.parts  # directory parts, excluding filename
-    if len(parts) >= 1 and not item.author:
+    if len(parts) >= 1:
+        # Folder structure is intentional — always trust it for author name
         item.author = parts[0]
     if len(parts) >= 2 and not item.series:
         item.series = parts[1]
