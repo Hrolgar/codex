@@ -656,6 +656,20 @@ function ProwlarrSection() {
     setEnabled(ss.getBool("prowlarr.enabled"));
     setProwlarrUrl(ss.get("prowlarr.url"));
     setProwlarrKey(ss.get("prowlarr.api_key"));
+    const savedIndexers = ss.get("prowlarr.indexers");
+    if (savedIndexers) {
+      try {
+        const parsed = JSON.parse(savedIndexers);
+        setIndexers(parsed);
+        setConnected(true);
+      } catch {}
+    }
+    const savedSelected = ss.get("prowlarr.selected_indexers");
+    if (savedSelected) {
+      try {
+        setSelectedIndexers(new Set(JSON.parse(savedSelected)));
+      } catch {}
+    }
   }, [ss.loaded]);
 
   const handleTest = async () => {
@@ -679,7 +693,13 @@ function ProwlarrSection() {
         try {
           const idx = await getProwlarrIndexers();
           setIndexers(idx);
-          setSelectedIndexers(new Set(idx.map((i) => i.id)));
+          const allIds = new Set(idx.map((i) => i.id));
+          setSelectedIndexers(allIds);
+          // Persist indexers so they load without re-testing
+          await ss.save({
+            "prowlarr.indexers": JSON.stringify(idx),
+            "prowlarr.selected_indexers": JSON.stringify([...allIds]),
+          });
         } catch {
           setIndexers([]);
         } finally {
@@ -700,6 +720,7 @@ function ProwlarrSection() {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      ss.save({ "prowlarr.selected_indexers": JSON.stringify([...next]) });
       return next;
     });
   };
