@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import logging
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -10,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from app.api.router import api_router
 from app.database import async_session, engine
 from app.models import Base
+
+logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path("/app/static")
 
@@ -40,8 +43,24 @@ async def lifespan(app: FastAPI):
     # Start background download queue processor
     from app.services.download_service import process_download_queue
     task = asyncio.create_task(process_download_queue())
+
+    # Periodic auto-download check (every 6 hours)
+    async def _periodic_tasks():
+        while True:
+            await asyncio.sleep(6 * 3600)  # 6 hours
+            try:
+                async with async_session() as db:
+                    from app.services.auto_download_service import check_wishlist_for_downloads
+                    count = await check_wishlist_for_downloads(db)
+                    if count:
+                        logger.info(f'Auto-download: started {count} downloads')
+            except Exception as e:
+                logger.warning(f'Periodic task error: {e}')
+
+    periodic_task = asyncio.create_task(_periodic_tasks())
     yield
     task.cancel()
+    periodic_task.cancel()
     await engine.dispose()
 
 
