@@ -1,31 +1,24 @@
 import { useState, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAuthor, refreshAuthor, deleteAuthor } from "@/api/client";
+import { getAuthor, refreshAuthor, deleteAuthor, getSeriesDetail } from "@/api/client";
+import type { AuthorMediaGroup } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
-import FindReleasesModal from "@/components/FindReleasesModal";
 import AuthorBookRow from "@/components/AuthorBookRow";
+import FindReleasesModal from "@/components/FindReleasesModal";
 import {
   ArrowLeft,
+  BookOpen,
   RefreshCw,
   Trash2,
   User,
-  Check,
-  X,
+  Eye,
+  EyeOff,
   Loader2,
   AlertCircle,
 } from "lucide-react";
 
-interface MediaGroup {
-  media_type: string;
-  books: any[];
-  total: number;
-  owned: number;
-  missing: number;
-  not_monitored: number;
-}
-
-const TAB_LABELS: Record<string, string> = {
+const MEDIA_LABELS: Record<string, string> = {
   ebook: "eBooks",
   audiobook: "Audiobooks",
   comic: "Comics",
@@ -39,7 +32,7 @@ export default function AuthorDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [findRelease, setFindRelease] = useState<{ title: string; author: string; mediaType: string } | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("");
 
   const { data: author, isLoading, error } = useQuery({
     queryKey: ["author", id],
@@ -57,6 +50,7 @@ export default function AuthorDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["author", id] });
       addToast("Refreshing catalog...", "info");
     },
+    onError: () => addToast("Failed to refresh catalog", "error"),
   });
 
   const deleteMutation = useMutation({
@@ -68,18 +62,11 @@ export default function AuthorDetailPage() {
     },
   });
 
-  // Build media groups from API response or client-side grouping
-  const groups: MediaGroup[] = useMemo(() => {
+  const groups: AuthorMediaGroup[] = useMemo(() => {
     if (!author) return [];
     if (author.media_groups?.length) return author.media_groups;
-
-    // Fallback: group all books (series + standalone) by media_type
-    const allBooks = [
-      ...(author.standalone_books || []),
-      ...(author.series?.flatMap((s: any) => s.books || []) || []),
-    ];
     const map: Record<string, any[]> = {};
-    for (const b of allBooks) {
+    for (const b of author.standalone_books || []) {
       const mt = b.media_type || "ebook";
       (map[mt] ??= []).push(b);
     }
@@ -93,11 +80,9 @@ export default function AuthorDetailPage() {
     }));
   }, [author]);
 
-  // Set initial tab
   const currentTab = activeTab || groups[0]?.media_type || "ebook";
   const activeGroup = groups.find((g) => g.media_type === currentTab);
 
-  // Total stats across all groups
   const totalBooks = groups.reduce((s, g) => s + g.total, 0);
   const ownedBooks = groups.reduce((s, g) => s + g.owned, 0);
   const missingBooks = groups.reduce((s, g) => s + g.missing, 0);
@@ -108,16 +93,13 @@ export default function AuthorDetailPage() {
       <div className="space-y-6">
         <div className="h-4 w-24 skeleton rounded" />
         <div className="flex gap-6">
-          <div className="w-24 h-24 skeleton rounded-lg shrink-0" />
+          <div className="w-32 h-32 skeleton rounded-lg shrink-0" />
           <div className="space-y-3 flex-1">
             <div className="h-8 w-48 skeleton rounded" />
             <div className="h-4 w-full skeleton rounded" />
             <div className="h-4 w-3/4 skeleton rounded" />
           </div>
         </div>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-14 skeleton rounded-lg" />
-        ))}
       </div>
     );
   }
@@ -127,160 +109,186 @@ export default function AuthorDetailPage() {
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <User size={32} className="text-gray-700 mb-3" />
         <p className="text-gray-400 text-lg">Author not found</p>
-        <Link to="/" className="text-indigo-400 hover:text-indigo-300 text-sm mt-2">
-          Back to authors
-        </Link>
+        <Link to="/" className="text-indigo-400 hover:text-indigo-300 text-sm mt-2 inline-block">Back to authors</Link>
       </div>
     );
   }
 
   const isFetching = author.catalog_status === "fetching";
+  const isCatalogError = author.catalog_status === "error";
+  const handleSearch = (title: string, auth: string, mediaType: string) => setFindRelease({ title, author: auth, mediaType });
 
   return (
     <div className="space-y-6">
-      {/* Back link */}
       <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors">
-        <ArrowLeft size={14} /> Back to authors
+        <ArrowLeft size={16} /> Back to authors
       </Link>
 
       {/* Header */}
       <div className="flex gap-6">
-        {/* Photo */}
-        <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-800 shrink-0 flex items-center justify-center">
+        <div className="w-32 h-32 rounded-lg bg-gray-800 overflow-hidden shrink-0 flex items-center justify-center">
           {author.photo_url ? (
             <img src={author.photo_url} alt={author.name} className="w-full h-full object-cover" />
           ) : (
-            <User size={32} className="text-gray-600" />
+            <User size={48} className="text-gray-600" />
           )}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-100">{author.name}</h1>
-              <p className="text-sm text-gray-500 mt-0.5">{totalBooks} books total · {ownedBooks} owned</p>
-            </div>
-
-            {/* Actions */}
+            <h1 className="text-2xl font-bold text-gray-100">{author.name}</h1>
             <div className="flex items-center gap-2 shrink-0">
-              {author.monitored && (
-                <span className="px-2.5 py-1 rounded text-xs font-medium bg-green-500/15 text-green-400 flex items-center gap-1">
-                  <Check size={12} /> Monitored
-                </span>
-              )}
+              <button
+                onClick={() => addToast(author.monitored ? "Monitoring paused" : "Monitoring all books", "info")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                  author.monitored ? "text-green-400 bg-green-500/10 hover:bg-green-500/20" : "text-gray-400 bg-gray-800 hover:bg-gray-700"
+                }`}
+              >
+                {author.monitored ? <Eye size={14} /> : <EyeOff size={14} />}
+                {author.monitored ? "Monitored" : "Monitor"}
+              </button>
               <button
                 onClick={() => refreshMutation.mutate()}
-                disabled={refreshMutation.isPending || isFetching}
-                className="p-2 text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50"
-                title="Refresh catalog"
+                disabled={refreshMutation.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
               >
-                <RefreshCw size={16} className={isFetching ? "animate-spin" : ""} />
+                <RefreshCw size={14} className={refreshMutation.isPending ? "animate-spin" : ""} />
+                Refresh
               </button>
-              {!showDeleteConfirm ? (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="p-2 text-gray-400 hover:text-red-400 transition-colors"
-                  title="Delete author"
-                >
-                  <Trash2 size={16} />
-                </button>
-              ) : (
-                <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1">
-                  <span className="text-xs text-red-400 mr-1">Delete?</span>
-                  <button onClick={() => deleteMutation.mutate(true)} className="p-1 text-red-400 hover:text-red-300" title="Delete with books">
-                    <Trash2 size={14} />
+              {showDeleteConfirm ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-red-400">Remove books too?</span>
+                  <button onClick={() => deleteMutation.mutate(true)} disabled={deleteMutation.isPending} className="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">
+                    {deleteMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : "Remove Books"}
                   </button>
-                  <button onClick={() => setShowDeleteConfirm(false)} className="p-1 text-gray-400 hover:text-gray-200">
-                    <X size={14} />
+                  <button onClick={() => deleteMutation.mutate(false)} disabled={deleteMutation.isPending} className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">
+                    Keep Books
                   </button>
+                  <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors">Cancel</button>
                 </div>
+              ) : (
+                <button onClick={() => setShowDeleteConfirm(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">
+                  <Trash2 size={14} /> Delete
+                </button>
               )}
             </div>
           </div>
 
-          {/* Bio */}
           {author.bio && (
-            <div className="mt-3">
-              <p className={`text-sm text-gray-400 leading-relaxed ${bioExpanded ? "" : "line-clamp-2"}`}>
-                {author.bio}
-              </p>
-              {author.bio.length > 200 && (
-                <button onClick={() => setBioExpanded(!bioExpanded)} className="text-xs text-indigo-400 hover:text-indigo-300 mt-1">
+            <div className="mt-3 bg-gray-900/50 rounded-lg p-3">
+              <p className={`text-sm text-gray-400 leading-relaxed ${!bioExpanded ? "line-clamp-3" : ""}`}>{author.bio}</p>
+              {author.bio.length > 300 && (
+                <button onClick={() => setBioExpanded(!bioExpanded)} className="text-xs text-indigo-400 hover:text-indigo-300 mt-1.5 transition-colors">
                   {bioExpanded ? "Show less" : "Show more"}
                 </button>
               )}
             </div>
           )}
+
+          {/* Stats bar */}
+          <div className="flex items-center gap-3 mt-3 text-sm">
+            <span className="text-gray-300"><span className="font-semibold text-gray-100">{totalBooks}</span> total</span>
+            <span className="text-gray-600">&middot;</span>
+            <span className="text-green-400"><span className="font-semibold">{ownedBooks}</span> owned</span>
+            <span className="text-gray-600">&middot;</span>
+            <span className="text-yellow-400"><span className="font-semibold">{missingBooks}</span> missing</span>
+            {notMonitored > 0 && (
+              <>
+                <span className="text-gray-600">&middot;</span>
+                <span className="text-gray-500"><span className="font-semibold">{notMonitored}</span> not monitored</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Fetching banner */}
+      {/* Catalog status banners */}
       {isFetching && (
-        <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-4 py-2">
-          <Loader2 size={14} className="text-indigo-400 animate-spin" />
-          <span className="text-sm text-indigo-300">Loading catalog from OpenLibrary...</span>
-        </div>
-      )}
-
-      {author.catalog_status === "error" && (
-        <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
-          <AlertCircle size={14} className="text-red-400" />
-          <span className="text-sm text-red-300">Catalog fetch failed. Try refreshing.</span>
-        </div>
-      )}
-
-      {/* Stats bar */}
-      <div className="flex items-center gap-4 text-sm">
-        <span className="text-gray-300 font-medium">{totalBooks} total</span>
-        <span className="text-green-400">{ownedBooks} owned</span>
-        <span className="text-yellow-400">{missingBooks} missing</span>
-        {notMonitored > 0 && <span className="text-gray-500">{notMonitored} not monitored</span>}
-      </div>
-
-      {/* Tabs */}
-      {groups.length > 0 && (
-        <div className="border-b border-gray-800">
-          <div className="flex gap-0">
-            {groups.map((g) => (
-              <button
-                key={g.media_type}
-                onClick={() => setActiveTab(g.media_type)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  currentTab === g.media_type
-                    ? "border-indigo-500 text-gray-100"
-                    : "border-transparent text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                {TAB_LABELS[g.media_type] || g.media_type} ({g.total})
-              </button>
-            ))}
+        <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-4 py-3">
+          <Loader2 size={18} className="text-indigo-400 animate-spin shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-indigo-400">Fetching bibliography from OpenLibrary...</p>
+            <p className="text-xs text-indigo-400/70 mt-0.5">This may take a minute for prolific authors.</p>
           </div>
         </div>
       )}
 
-      {/* Book list for active tab */}
-      {activeGroup && activeGroup.books.length > 0 ? (
-        <div className="border border-gray-800 rounded-lg overflow-hidden">
-          {activeGroup.books.map((book: any) => (
-            <AuthorBookRow
-              key={book.id}
-              book={book}
-              authorName={author.name}
-              onSearch={(title, auth, mediaType) => setFindRelease({ title, author: auth, mediaType })}
-            />
+      {isCatalogError && (
+        <div className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
+          <div className="flex items-center gap-3">
+            <AlertCircle size={18} className="text-red-400 shrink-0" />
+            <p className="text-sm text-red-400">Failed to fetch catalog from OpenLibrary.</p>
+          </div>
+          <button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">
+            <RefreshCw size={14} className={refreshMutation.isPending ? "animate-spin" : ""} /> Retry
+          </button>
+        </div>
+      )}
+
+      {/* Media type tabs */}
+      {groups.length > 1 && (
+        <div className="flex gap-1">
+          {groups.map((g) => (
+            <button
+              key={g.media_type}
+              onClick={() => setActiveTab(g.media_type)}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                currentTab === g.media_type
+                  ? "bg-indigo-500/20 text-indigo-400"
+                  : "text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700"
+              }`}
+            >
+              {MEDIA_LABELS[g.media_type] || g.media_type} ({g.total})
+            </button>
           ))}
         </div>
-      ) : groups.length === 0 && !isFetching ? (
-        <div className="text-center py-12 text-gray-500">
-          <p>No books found for this author.</p>
-          <p className="text-sm mt-1">Try refreshing the catalog.</p>
-        </div>
-      ) : null}
+      )}
 
-      {/* Find Releases Modal */}
+      {/* Book list for active tab */}
+      {activeGroup && activeGroup.books.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+          {activeGroup.books.map((book: any) => (
+            <AuthorBookRow key={book.id} book={book} authorName={author.name} onSearch={handleSearch} />
+          ))}
+        </div>
+      )}
+
+      {/* Series in the current tab */}
+      {author.series.map((series) => (
+        <SeriesSection
+          key={series.id}
+          seriesId={series.id}
+          seriesName={series.name}
+          ownedCount={series.owned_count}
+          bookCount={series.book_count}
+          authorName={author.name}
+          mediaType={currentTab}
+          onSearch={handleSearch}
+        />
+      ))}
+
+      {/* Empty state */}
+      {!isFetching && groups.length === 0 && author.series.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <BookOpen size={32} className="text-gray-700 mb-3" />
+          <p className="text-gray-400">No books found for this author</p>
+          <button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors">
+            <RefreshCw size={14} /> Refresh Catalog
+          </button>
+        </div>
+      )}
+
+      {isFetching && groups.length === 0 && author.series.length === 0 && (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-14 skeleton rounded-lg" />
+          ))}
+        </div>
+      )}
+
       {findRelease && (
         <FindReleasesModal
-          open={true}
+          open={!!findRelease}
           onClose={() => setFindRelease(null)}
           bookTitle={findRelease.title}
           bookAuthor={findRelease.author}
@@ -288,5 +296,67 @@ export default function AuthorDetailPage() {
         />
       )}
     </div>
+  );
+}
+
+function SeriesSection({
+  seriesId,
+  seriesName,
+  ownedCount,
+  bookCount,
+  authorName,
+  mediaType,
+  onSearch,
+}: {
+  seriesId: string;
+  seriesName: string;
+  ownedCount: number;
+  bookCount: number;
+  authorName: string;
+  mediaType: string;
+  onSearch: (title: string, author: string, mediaType: string) => void;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["series", seriesId],
+    queryFn: () => getSeriesDetail(seriesId),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-1">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-14 skeleton rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  const books = data?.books ? [...data.books].sort((a, b) => a.position - b.position) : [];
+  if (books.length === 0) return null;
+
+  const pct = bookCount > 0 ? Math.round((ownedCount / bookCount) * 100) : 0;
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-gray-300">{seriesName}</h3>
+        <div className="flex items-center gap-2">
+          <div className="w-20 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${pct === 100 ? "bg-green-500" : "bg-indigo-500"}`} style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-xs text-gray-500">{ownedCount}/{bookCount}</span>
+        </div>
+      </div>
+      <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+        {books.map((book) => (
+          <AuthorBookRow
+            key={book.id}
+            book={{ ...book, owned: book.owned ?? false, monitored: true, media_type: book.media_type || mediaType }}
+            authorName={authorName}
+            onSearch={onSearch}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
