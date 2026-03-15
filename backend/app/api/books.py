@@ -1,13 +1,12 @@
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.book import Book
+from app.models import Book, BookAuthor, Download, Edition, LibraryItem, SeriesBook
 from app.schemas import BookListItem, BookListResponse, BookResponse
-from app.schemas.book import ReadStatusUpdate
 from app.services.library_service import LibraryService
 
 router = APIRouter()
@@ -41,39 +40,6 @@ async def get_book(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return book
 
 
-_VALID_READ_STATUSES = {"unread", "reading", "read"}
-
-
-@router.put("/{book_id}/status")
-async def update_read_status(
-    book_id: uuid.UUID,
-    body: ReadStatusUpdate,
-    db: AsyncSession = Depends(get_db),
-):
-    if body.read_status not in _VALID_READ_STATUSES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid read_status. Must be one of: {', '.join(sorted(_VALID_READ_STATUSES))}",
-        )
-
-    book = await db.get(Book, book_id)
-    if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
-
-    book.read_status = body.read_status
-
-    if body.date_read is not None:
-        book.date_read = body.date_read
-    elif body.read_status == "read" and not book.date_read:
-        book.date_read = datetime.now(timezone.utc)
-    elif body.read_status != "read":
-        book.date_read = None
-
-    await db.commit()
-    await db.refresh(book)
-    return {"id": str(book.id), "read_status": book.read_status, "date_read": book.date_read}
-
-
 @router.put("/{book_id}/monitored")
 async def toggle_book_monitored(
     book_id: uuid.UUID,
@@ -86,3 +52,27 @@ async def toggle_book_monitored(
     book.monitored = body.get("monitored", True)
     await db.commit()
     return {"id": str(book.id), "monitored": book.monitored}
+
+
+@router.delete("/{book_id}")
+async def delete_book(
+    book_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a book and all its associations."""
+    book = await db.get(Book, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    # Delete associations in dependency order
+    await db.execute(delete(BookAuthor).where(BookAuthor.book_id == book_id))
+    await db.execute(delete(SeriesBook).where(SeriesBook.book_id == book_id))
+    await db.execute(delete(Edition).where(Edition.book_id == book_id))
+    await db.execute(delete(LibraryItem).where(LibraryItem.book_id == book_id))
+    # Nullify download references instead of deleting
+    result = await db.execute(select(Download).where(Download.book_id == book_id))
+    for dl in result.scalars():
+        dl.book_id = None
+    await db.delete(book)
+    await db.commit()
+    return {"status": "deleted", "book_id": str(book_id)}

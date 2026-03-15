@@ -31,11 +31,6 @@ class BookCreate(BaseModel):
     asin: str | None = None
 
 
-class ReadStatusUpdate(BaseModel):
-    read_status: str  # unread | reading | read
-    date_read: datetime | None = None
-
-
 class LibraryItemBrief(BaseModel):
     id: uuid.UUID
     library_id: uuid.UUID
@@ -62,8 +57,6 @@ class BookResponse(BaseModel):
     asin: str | None = None
     openlibrary_key: str | None = None
     metadata_source: str | None = None
-    read_status: str = "unread"
-    date_read: datetime | None = None
     authors: list[AuthorBrief] = []
     series: list[SeriesBrief] = []
     library_items: list[LibraryItemBrief] = []
@@ -81,6 +74,8 @@ class BookListItem(BaseModel):
     cover_url: str | None = None
     isbn_13: str | None = None
     publish_year: int | None = None
+    owned: bool = False
+    monitored: bool = True
 
     model_config = {"from_attributes": True}
 

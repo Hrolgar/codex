@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
-from app.models import Author, Book, BookAuthor
+from app.models import Author, Book, BookAuthor, Series, SeriesBook
 from app.models.download import Download
 from app.schemas.download import DownloadResponse
 from app.services.settings_service import get_setting
@@ -76,6 +76,23 @@ def _sanitize_for_path(name: str, max_length: int = 200) -> str:
     name = re.sub(r'\s+', '_', name)
     # Trim to max length
     return name[:max_length].strip("._")
+
+
+def _is_torrent_source(source_url: str, source_type: str) -> bool:
+    """Check if a download source is a torrent or magnet link."""
+    return (
+        source_type.lower() in ("torrent", "magnet")
+        or source_url.startswith("magnet:")
+        or source_url.endswith(".torrent")
+    )
+
+
+def _is_nzb_source(source_url: str, source_type: str) -> bool:
+    """Check if a download source is an NZB."""
+    return (
+        source_type.lower() == "nzb"
+        or source_url.endswith(".nzb")
+    )
 
 
 # Track active download tasks for cancellation
@@ -156,8 +173,129 @@ async def _get_dir(db: AsyncSession, key: str, fallback: str) -> Path:
     return Path(val) if val else Path(fallback)
 
 
+async def _get_book_context(db: AsyncSession, book_id: uuid.UUID):
+    """Build a PathContext from a book's metadata."""
+    from app.services.path_template_service import PathContext
+
+    book = await db.get(Book, book_id)
+    if not book:
+        return None, None
+
+    # Get first author name
+    author_result = await db.execute(
+        select(Author.name, Author.sort_name)
+        .join(BookAuthor, Author.id == BookAuthor.author_id)
+        .where(BookAuthor.book_id == book_id)
+        .limit(1)
+    )
+    author_row = author_result.first()
+    author_name = author_row[0] if author_row else "Unknown"
+
+    # Get series info
+    series_result = await db.execute(
+        select(Series.name, SeriesBook.position)
+        .join(SeriesBook, Series.id == SeriesBook.series_id)
+        .where(SeriesBook.book_id == book_id)
+        .limit(1)
+    )
+    series_row = series_result.first()
+
+    ctx = PathContext(
+        author=author_name,
+        title=book.title,
+        series=series_row[0] if series_row else "",
+        series_position=str(series_row[1]) if series_row else "",
+        year=str(book.publish_year) if book.publish_year else "",
+        isbn=book.isbn_13 or book.isbn_10 or "",
+        language=book.language or "",
+    )
+    return book, ctx
+
+
+async def _get_media_settings(db: AsyncSession, media_type: str) -> tuple[str, str, bool]:
+    """Get destination, path_template, and hardlink setting for a media type."""
+    from app.services.path_template_service import DEFAULT_TEMPLATES
+
+    media_key_map = {
+        "ebook": "books",
+        "audiobook": "audiobooks",
+        "comic": "comics",
+    }
+    key = media_key_map.get(media_type, "books")
+
+    destination = await get_setting(db, f"downloads.{key}.destination") or f"/downloads/{key}"
+    # Comics uses .template instead of .path_template
+    if key == "comics":
+        path_template = await get_setting(db, f"downloads.{key}.template") or DEFAULT_TEMPLATES.get(media_type, DEFAULT_TEMPLATES["ebook"])
+    else:
+        path_template = await get_setting(db, f"downloads.{key}.path_template") or DEFAULT_TEMPLATES.get(media_type, DEFAULT_TEMPLATES["ebook"])
+    hardlink_val = await get_setting(db, f"downloads.{key}.hardlink") or "false"
+    use_hardlink = hardlink_val.lower() == "true"
+
+    return destination, path_template, use_hardlink
+
+
 async def _process_single(dl: Download, db: AsyncSession) -> None:
     """Download a single file with chunked streaming and progress updates."""
+    from app.services.download_client_service import get_client_from_settings, QBittorrentClient, SABnzbdClient
+    from app.services.hardlink_service import process_completed_download
+    from app.services.path_template_service import PathContext
+
+    # Check if we should delegate to a download client
+    if _is_torrent_source(dl.source_url, dl.source_type):
+        client = await get_client_from_settings(db)
+        if isinstance(client, QBittorrentClient):
+            dl.status = "downloading"
+            dl.progress = 0.0
+            await db.commit()
+            await _broadcast_progress(dl)
+            try:
+                # Determine save path from settings
+                book = await db.get(Book, dl.book_id) if dl.book_id else None
+                media_type = book.media_type if book else "ebook"
+                destination, _, _ = await _get_media_settings(db, media_type)
+                await client.add_torrent(dl.source_url, save_path=destination)
+                dl.status = "complete"
+                dl.progress = 1.0
+                dl.target_path = destination
+                await db.commit()
+                await _broadcast_progress(dl)
+                logger.info("Torrent sent to qBittorrent: %s", dl.id)
+                return
+            except Exception as exc:
+                logger.exception("qBittorrent failed for %s", dl.id)
+                dl.status = "error"
+                dl.error = f"qBittorrent error: {str(exc)[:400]}"
+                await db.commit()
+                await _broadcast_progress(dl)
+                return
+
+    if _is_nzb_source(dl.source_url, dl.source_type):
+        client = await get_client_from_settings(db)
+        if isinstance(client, SABnzbdClient):
+            dl.status = "downloading"
+            dl.progress = 0.0
+            await db.commit()
+            await _broadcast_progress(dl)
+            try:
+                book = await db.get(Book, dl.book_id) if dl.book_id else None
+                name = book.title if book else ""
+                await client.add_nzb(dl.source_url, name=name)
+                dl.status = "complete"
+                dl.progress = 1.0
+                await db.commit()
+                await _broadcast_progress(dl)
+                logger.info("NZB sent to SABnzbd: %s", dl.id)
+                return
+            except Exception as exc:
+                logger.exception("SABnzbd failed for %s", dl.id)
+                dl.status = "error"
+                dl.error = f"SABnzbd error: {str(exc)[:400]}"
+                await db.commit()
+                await _broadcast_progress(dl)
+                return
+
+    # Fall back to direct HTTP download
     download_dir = await _get_dir(db, "download.dir", "/downloads")
     temp_dir = await _get_dir(db, "download.temp_dir", "/tmp/codex")
     download_dir.mkdir(parents=True, exist_ok=True)
@@ -207,7 +345,7 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
         # Move to final location
         temp_path.rename(final_path)
 
-        # Post-download: rename and organize by author/title
+        # Post-download: use path template and hardlink service if book is linked
         organized_path = await _organize_file(db, dl, final_path, download_dir)
 
         dl.status = "complete"
@@ -233,46 +371,34 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
 async def _organize_file(
     db: AsyncSession, dl: Download, current_path: Path, download_dir: Path
 ) -> Path:
-    """Rename and move downloaded file into Author/Title structure."""
+    """Organize downloaded file using path templates and hardlink service."""
+    from app.services.hardlink_service import process_completed_download
+
     if not dl.book_id:
         return current_path
 
-    book = await db.get(Book, dl.book_id)
-    if not book:
+    book, ctx = await _get_book_context(db, dl.book_id)
+    if not book or not ctx:
         return current_path
 
-    # Get first author name
-    author_result = await db.execute(
-        select(Author.name)
-        .join(BookAuthor, Author.id == BookAuthor.author_id)
-        .where(BookAuthor.book_id == dl.book_id)
-        .limit(1)
-    )
-    author_row = author_result.first()
-    author_name = _sanitize_for_path(author_row[0]) if author_row else "Unknown"
-    title = _sanitize_for_path(book.title)
+    # Get media-specific settings
+    destination, path_template, use_hardlink = await _get_media_settings(db, book.media_type)
 
-    ext = current_path.suffix
-    base = f"{author_name}_-_{title}"
-    # Limit total filename (with extension) to 200 chars
-    max_base = 200 - len(ext)
-    if len(base) > max_base:
-        base = base[:max_base].rstrip("_")
-    new_filename = f"{base}{ext}"
-    organized_dir = download_dir / author_name
-    organized_dir.mkdir(parents=True, exist_ok=True)
-    organized_path = organized_dir / new_filename
-
-    # Verify the organized path stays inside download_dir
-    if not str(organized_path.resolve()).startswith(str(download_dir.resolve())):
-        logger.warning("Path traversal detected during organization, keeping original path")
-        return current_path
+    # Set file format on context
+    ctx.format = current_path.suffix.lstrip(".")
+    ctx.original_name = current_path.stem
 
     try:
-        current_path.rename(organized_path)
-        return organized_path
-    except OSError:
-        logger.warning("Failed to organize file, keeping at %s", current_path)
+        dest_path = await process_completed_download(
+            source_path=str(current_path),
+            destination_root=destination,
+            path_template=path_template,
+            context=ctx,
+            use_hardlink=use_hardlink,
+        )
+        return Path(dest_path)
+    except Exception:
+        logger.warning("Failed to organize file via hardlink service, keeping at %s", current_path, exc_info=True)
         return current_path
 
 

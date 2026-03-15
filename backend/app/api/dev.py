@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+import os
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,8 +17,15 @@ from app.services.entity_service import (
 router = APIRouter()
 
 
+def _check_dev_mode():
+    if os.environ.get("CODEX_DEV_MODE", "").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not found")
+
+
 @router.post("/seed")
 async def seed(db: AsyncSession = Depends(get_db)):
+    _check_dev_mode()
+
     # Create demo library
     result = await db.execute(select(Library).where(Library.name == "Demo Library"))
     lib = result.scalar_one_or_none()
@@ -85,6 +94,8 @@ async def seed(db: AsyncSession = Depends(get_db)):
 
 @router.post("/clear")
 async def clear(db: AsyncSession = Depends(get_db)):
+    _check_dev_mode()
+
     for model in [LibraryItem, SeriesBook, BookAuthor, Book, Series, Author, Library]:
         await db.execute(model.__table__.delete())
     await db.commit()

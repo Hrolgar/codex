@@ -63,6 +63,17 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     "downloads.comics.template": ("Comics Path Template", "Path template for organizing comic files", "downloads", False),
     "downloads.comics.hardlink": ("Comics Hardlink", "Use hardlinks instead of copying comic files", "downloads", False),
 
+    # Downloads – Global
+    "downloads.hardlinks_enabled": ("Hardlinks Enabled", "Global toggle for using hardlinks instead of copying files", "downloads", False),
+
+    # Downloads – Media-type aliases (ebook/audiobook/comic)
+    "downloads.ebook.destination": ("Ebook Destination", "Directory where downloaded ebooks are saved", "downloads", False),
+    "downloads.ebook.path_template": ("Ebook Path Template", "Path template for organizing ebook files", "downloads", False),
+    "downloads.audiobook.destination": ("Audiobook Destination", "Directory where downloaded audiobooks are saved", "downloads", False),
+    "downloads.audiobook.path_template": ("Audiobook Path Template", "Path template for organizing audiobook files", "downloads", False),
+    "downloads.comic.destination": ("Comic Destination", "Directory where downloaded comics are saved", "downloads", False),
+    "downloads.comic.path_template": ("Comic Path Template", "Path template for organizing comic files", "downloads", False),
+
     # Metadata Providers
     "metadata.hardcover.enabled": ("Hardcover Enabled", "Enable Hardcover as a metadata provider", "metadata", False),
     "metadata.hardcover.api_key": ("Hardcover API Key", "API key for Hardcover metadata provider", "metadata", True),
@@ -132,6 +143,15 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "downloads.comics.destination": "/downloads/comics",
     "downloads.comics.template": "{Author}/{Series}/{Title}",
     "downloads.comics.hardlink": "true",
+    # Downloads – Global
+    "downloads.hardlinks_enabled": "true",
+    # Downloads – Media-type aliases
+    "downloads.ebook.destination": "/downloads/books",
+    "downloads.ebook.path_template": "{Author}/{Series?{Series}/{SeriesPosition} - }{Title}",
+    "downloads.audiobook.destination": "/downloads/audiobooks",
+    "downloads.audiobook.path_template": "{Author}/{Series?{Series}/{SeriesPosition} - }{Title}",
+    "downloads.comic.destination": "/downloads/comics",
+    "downloads.comic.path_template": "{Author}/{Series?{Series}/}{Title}",
     # Metadata providers
     "metadata.hardcover.enabled": "false",
     "metadata.hardcover.api_key": "",
