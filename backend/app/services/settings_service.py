@@ -20,12 +20,29 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     "download.dir": ("Download Directory", "Where to save downloaded files", "downloads", False),
     "download.temp_dir": ("Temp Directory", "Temporary directory for in-progress downloads", "downloads", False),
 
-    # Metadata
-    "metadata.hardcover_api_key": ("Hardcover API Key", "API key for Hardcover metadata provider", "metadata", True),
-    "metadata.google_books_api_key": ("Google Books API Key", "API key for Google Books metadata provider", "metadata", True),
-
     # General
     "general.languages": ("Languages", "Comma-separated language codes to include (e.g. en,no). Leave empty for all.", "general", False),
+    "general.theme": ("Theme", "UI color theme", "general", False),
+    "general.library_url": ("Library URL", "URL to your ebook library (e.g. Calibre-Web)", "general", False),
+    "general.audiobook_library_url": ("Audiobook Library URL", "URL to your audiobook library (e.g. Audiobookshelf)", "general", False),
+    "general.supported_book_formats": ("Supported Book Formats", "Comma-separated list of supported ebook file formats", "general", False),
+    "general.supported_audiobook_formats": ("Supported Audiobook Formats", "Comma-separated list of supported audiobook file formats", "general", False),
+
+    # Downloads – Books
+    "downloads.books.destination": ("Books Destination", "Directory where downloaded books are saved", "downloads", False),
+    "downloads.books.file_organization": ("Books File Organization", "How to organize downloaded book files (rename, copy, move)", "downloads", False),
+    "downloads.books.path_template": ("Books Path Template", "Path template for organizing book files", "downloads", False),
+    "downloads.books.hardlink": ("Books Hardlink", "Use hardlinks instead of copying book files", "downloads", False),
+    "downloads.audiobooks.destination": ("Audiobooks Destination", "Directory where downloaded audiobooks are saved", "downloads", False),
+    "downloads.audiobooks.file_organization": ("Audiobooks File Organization", "How to organize downloaded audiobook files (rename, copy, move)", "downloads", False),
+    "downloads.audiobooks.path_template": ("Audiobooks Path Template", "Path template for organizing audiobook files", "downloads", False),
+    "downloads.audiobooks.hardlink": ("Audiobooks Hardlink", "Use hardlinks instead of copying audiobook files", "downloads", False),
+
+    # Metadata Providers
+    "metadata.hardcover.enabled": ("Hardcover Enabled", "Enable Hardcover as a metadata provider", "metadata", False),
+    "metadata.hardcover.api_key": ("Hardcover API Key", "API key for Hardcover metadata provider", "metadata", True),
+    "metadata.google_books.enabled": ("Google Books Enabled", "Enable Google Books as a metadata provider", "metadata", False),
+    "metadata.google_books.api_key": ("Google Books API Key", "API key for Google Books metadata provider", "metadata", True),
 
     # Auto-download
     "auto_download.interval_hours": ("Check Interval (hours)", "How often to check wishlist for auto-downloads (default: 6)", "auto_download", False),
@@ -37,19 +54,45 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     "notifications.discord_webhook_url": ("Discord Webhook URL", "Discord webhook URL for sending notifications", "notifications", False),
 }
 
+# Default values for settings that should have non-empty defaults.
+SETTINGS_DEFAULTS: dict[str, str] = {
+    "general.theme": "dark",
+    "general.library_url": "",
+    "general.audiobook_library_url": "",
+    "general.supported_book_formats": "epub,mobi,azw3,pdf,cbz,cbr",
+    "general.supported_audiobook_formats": "m4b,mp3,m4a",
+    "downloads.books.destination": "/downloads/books",
+    "downloads.books.file_organization": "rename",
+    "downloads.books.path_template": "{Author}/{Series}/{SeriesPosition} - {Title}",
+    "downloads.books.hardlink": "false",
+    "downloads.audiobooks.destination": "/downloads/audiobooks",
+    "downloads.audiobooks.file_organization": "rename",
+    "downloads.audiobooks.path_template": "{Author}/{Series}/{SeriesPosition} - {Title}",
+    "downloads.audiobooks.hardlink": "false",
+    "metadata.hardcover.enabled": "false",
+    "metadata.hardcover.api_key": "",
+    "metadata.google_books.enabled": "false",
+    "metadata.google_books.api_key": "",
+}
+
 
 async def get_all_settings(db: AsyncSession) -> dict[str, str]:
-    """Get all settings as a flat dict."""
+    """Get all settings as a flat dict, with defaults applied."""
+    merged = dict(SETTINGS_DEFAULTS)
     result = await db.execute(select(AppSetting))
     rows = result.scalars().all()
-    return {row.key: row.value for row in rows}
+    for row in rows:
+        merged[row.key] = row.value
+    return merged
 
 
 async def get_setting(db: AsyncSession, key: str) -> str | None:
-    """Get a single setting value."""
+    """Get a single setting value, falling back to default."""
     result = await db.execute(select(AppSetting).where(AppSetting.key == key))
     row = result.scalar_one_or_none()
-    return row.value if row else None
+    if row is not None:
+        return row.value
+    return SETTINGS_DEFAULTS.get(key)
 
 
 async def set_setting(db: AsyncSession, key: str, value: str) -> None:

@@ -25,13 +25,13 @@ class MetadataService:
             return
         self._providers_built = True
 
-        hardcover_key = await get_setting(self.db, "metadata.hardcover_api_key")
+        hardcover_key = await get_setting(self.db, "metadata.hardcover.api_key")
         if hardcover_key:
             self.providers.append(HardcoverProvider(api_key=hardcover_key))
 
         self.providers.append(OpenLibraryProvider())
 
-        google_key = await get_setting(self.db, "metadata.google_books_api_key")
+        google_key = await get_setting(self.db, "metadata.google_books.api_key")
         self.providers.append(GoogleBooksProvider(api_key=google_key))
 
     async def enrich_book(self, book: Book) -> bool:
