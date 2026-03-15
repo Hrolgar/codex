@@ -2,18 +2,13 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.book import Book
 from app.schemas import BookListItem, BookListResponse, BookResponse
+from app.schemas.book import ReadStatusUpdate
 from app.services.library_service import LibraryService
-
-
-class ReadStatusUpdate(BaseModel):
-    read_status: str  # unread | reading | read
-    date_read: datetime | None = None
 
 router = APIRouter()
 

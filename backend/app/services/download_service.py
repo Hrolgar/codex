@@ -66,16 +66,16 @@ def sanitize_filename(filename: str) -> str:
     return os.path.basename(filename.replace("\x00", ""))
 
 
-def _sanitize_for_path(name: str, max_length: int = 100) -> str:
+def _sanitize_for_path(name: str, max_length: int = 200) -> str:
     """Sanitize a string for use in file/directory names."""
     # Normalize unicode
     name = unicodedata.normalize("NFKD", name)
     # Remove characters that are problematic in filenames
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", name)
-    # Collapse whitespace
-    name = " ".join(name.split())
+    # Replace spaces with underscores
+    name = re.sub(r'\s+', '_', name)
     # Trim to max length
-    return name[:max_length].strip(". ")
+    return name[:max_length].strip("._")
 
 
 # Track active download tasks for cancellation
@@ -253,7 +253,12 @@ async def _organize_file(
     title = _sanitize_for_path(book.title)
 
     ext = current_path.suffix
-    new_filename = f"{author_name} - {title}{ext}"
+    base = f"{author_name}_-_{title}"
+    # Limit total filename (with extension) to 200 chars
+    max_base = 200 - len(ext)
+    if len(base) > max_base:
+        base = base[:max_base].rstrip("_")
+    new_filename = f"{base}{ext}"
     organized_dir = download_dir / author_name
     organized_dir.mkdir(parents=True, exist_ok=True)
     organized_path = organized_dir / new_filename
