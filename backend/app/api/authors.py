@@ -37,12 +37,17 @@ async def search_authors_external(
     existing = await db.execute(select(Author.name))
     existing_names = {r[0].lower() for r in existing}
 
+    logger.info("Author search: provider=%s, q=%r, existing=%s", provider, q, existing_names)
+
     if provider == "hardcover":
         api_key = await get_setting(db, "metadata.hardcover.api_key")
+        logger.info("Author search: hardcover api_key present=%s", bool(api_key))
         if api_key:
             from app.metadata.hardcover import search_books
 
             hc_results = await search_books(api_key, q, per_page=8)
+            logger.info("Author search: got %d book results from hardcover", len(hc_results))
+            seen_names = set()
             results = []
             for r in hc_results:
                 name_parts = [
@@ -52,6 +57,9 @@ async def search_authors_external(
                 name = ", ".join(n for n in name_parts if n) or r.get("title", "")
                 if name.lower() in existing_names:
                     continue
+                if name.lower() in seen_names:
+                    continue
+                seen_names.add(name.lower())
                 results.append(
                     {
                         "name": name,
@@ -60,6 +68,7 @@ async def search_authors_external(
                         "top_work": r.get("title", ""),
                     }
                 )
+            logger.info("Author search: returning %d results", len(results[:6]))
             return results[:6]
 
     # Default: OpenLibrary
