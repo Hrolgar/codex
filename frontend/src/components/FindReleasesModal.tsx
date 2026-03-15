@@ -89,9 +89,9 @@ export default function FindReleasesModal({
       const q = filter.toLowerCase();
       items = items.filter(
         (r) =>
-          r.title.toLowerCase().includes(q) ||
+          (r.raw_title ?? r.title).toLowerCase().includes(q) ||
           (r.indexer ?? "").toLowerCase().includes(q) ||
-          parseFormat(r.title, r.format).includes(q),
+          parseFormat(r.raw_title ?? r.title, r.format).includes(q),
       );
     }
     return [...items].sort((a, b) => {
@@ -106,8 +106,8 @@ export default function FindReleasesModal({
         case "indexer":
           return (a.indexer ?? "").localeCompare(b.indexer ?? "") * dir;
         case "format":
-          return parseFormat(a.title, a.format).localeCompare(
-            parseFormat(b.title, b.format),
+          return parseFormat(a.raw_title ?? a.title, a.format).localeCompare(
+            parseFormat(b.raw_title ?? b.title, b.format),
           ) * dir;
         default:
           return 0;
@@ -271,7 +271,7 @@ export default function FindReleasesModal({
                     className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors group"
                   >
                     <td className="py-2.5 pr-3 text-gray-200">
-                      <span className="break-words">{result.title}</span>
+                      <span className="break-words">{result.raw_title ?? result.title}</span>
                     </td>
                     <td className="py-2.5 pr-3 text-gray-400 whitespace-nowrap">
                       {result.indexer ?? "—"}
@@ -281,13 +281,13 @@ export default function FindReleasesModal({
                     </td>
                     <td className="py-2.5 pr-3 whitespace-nowrap">
                       <span className="inline-block bg-gray-800 text-gray-300 text-xs px-2 py-0.5 rounded uppercase">
-                        {parseFormat(result.title, result.format)}
+                        {parseFormat(result.raw_title ?? result.title, result.format)}
                       </span>
                     </td>
                     <td className="py-2.5 pr-3 text-gray-400 whitespace-nowrap">
                       <span className="text-green-400">{result.seeders ?? "—"}</span>
                       {" / "}
-                      <span className="text-red-400">—</span>
+                      <span className="text-red-400">{result.leechers ?? "—"}</span>
                     </td>
                     <td className="py-2.5">
                       <button

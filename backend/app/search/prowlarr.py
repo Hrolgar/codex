@@ -78,16 +78,24 @@ async def search_prowlarr(
                 break
 
         download_url = item.get("downloadUrl") or None
+        size = item.get("size") or None
+        seeders = item.get("seeders") or None
+        leechers = item.get("leechers") or None
 
         results.append(
             SearchResult(
                 title=title,
+                raw_title=raw_title,
                 author=author,
                 isbn=isbn,
                 source=source,
                 download_url=download_url,
                 owned=False,
                 match_confidence=0.0,
+                indexer=source,
+                size=size,
+                seeders=seeders,
+                leechers=leechers,
             )
         )
 

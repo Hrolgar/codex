@@ -269,6 +269,7 @@ export function updateSettings(settings: Record<string, string>) {
 export interface SearchResult {
   book_id: string | null;
   title: string;
+  raw_title: string | null;
   author: string | null;
   isbn: string | null;
   cover_url: string | null;
@@ -279,6 +280,7 @@ export interface SearchResult {
   indexer: string | null;
   size: number | null;
   seeders: number | null;
+  leechers: number | null;
   format: string | null;
 }
 
