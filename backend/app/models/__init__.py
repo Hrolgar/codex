@@ -4,6 +4,7 @@ from app.models.download import Download
 from app.models.edition import Edition
 from app.models.library import Library, LibraryItem
 from app.models.notification import Notification
+from app.models.root_folder import RootFolder
 from app.models.series import Series, SeriesBook
 from app.models.settings import AppSetting
 from app.models.wishlist import WishlistItem
@@ -22,4 +23,5 @@ __all__ = [
     "Notification",
     "WishlistItem",
     "AppSetting",
+    "RootFolder",
 ]

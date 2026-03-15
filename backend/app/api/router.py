@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 
-from app.api import authors, books, dev, downloads, library, notifications, search, series, system, wishlist
+from app.api import authors, books, dev, downloads, library, notifications, root_folders, search, series, system, wishlist
 
 api_router = APIRouter()
+api_router.include_router(root_folders.router, prefix="/root-folders", tags=["root-folders"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(library.router, prefix="/libraries", tags=["libraries"])
 api_router.include_router(books.router, prefix="/books", tags=["books"])

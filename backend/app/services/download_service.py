@@ -213,8 +213,22 @@ async def _get_book_context(db: AsyncSession, book_id: uuid.UUID):
 
 
 async def _get_media_settings(db: AsyncSession, media_type: str) -> tuple[str, str, bool]:
-    """Get destination, path_template, and hardlink setting for a media type."""
+    """Get destination, path_template, and hardlink setting for a media type.
+
+    Looks up the default RootFolder for the media type first. Falls back to
+    the legacy downloads.*.destination settings if no root folder is configured.
+    """
+    from app.models.root_folder import RootFolder
     from app.services.path_template_service import DEFAULT_TEMPLATES
+
+    # Try root folder first
+    result = await db.execute(
+        select(RootFolder).where(
+            RootFolder.media_type == media_type,
+            RootFolder.default.is_(True),
+        ).limit(1)
+    )
+    root_folder = result.scalar_one_or_none()
 
     media_key_map = {
         "ebook": "books",
@@ -223,7 +237,12 @@ async def _get_media_settings(db: AsyncSession, media_type: str) -> tuple[str, s
     }
     key = media_key_map.get(media_type, "books")
 
-    destination = await get_setting(db, f"downloads.{key}.destination") or f"/downloads/{key}"
+    if root_folder:
+        destination = root_folder.path
+    else:
+        # Legacy fallback: read from settings
+        destination = await get_setting(db, f"downloads.{key}.destination") or f"/downloads/{key}"
+
     # Comics uses .template instead of .path_template
     if key == "comics":
         path_template = await get_setting(db, f"downloads.{key}.template") or DEFAULT_TEMPLATES.get(media_type, DEFAULT_TEMPLATES["ebook"])
