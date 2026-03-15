@@ -31,6 +31,7 @@ export default function AuthorDetailPage() {
   const [findReleasesBook, setFindReleasesBook] = useState<{title: string, author: string, mediaType?: string} | null>(null);
   const [collapsedSeries, setCollapsedSeries] = useState<Set<string>>(new Set());
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [mediaFilter, setMediaFilter] = useState<string>("all");
   const { data: author, isLoading, error } = useQuery({
     queryKey: ["author", id],
     queryFn: () => getAuthor(id!),
@@ -358,27 +359,70 @@ export default function AuthorDetailPage() {
         );
       })}
 
-      {/* Standalone Books grouped by media type */}
-      {(() => {
-        const groups: { label: string; key: string; books: typeof author.standalone_books }[] = [
-          { label: "Books", key: "ebook", books: author.standalone_books.filter((b) => !b.media_type || b.media_type === "ebook") },
-          { label: "Audiobooks", key: "audiobook", books: author.standalone_books.filter((b) => b.media_type === "audiobook") },
-          { label: "Comics", key: "comic", books: author.standalone_books.filter((b) => b.media_type === "comic") },
+      {/* Standalone Books with media type filter */}
+      {author.standalone_books.length > 0 && (() => {
+        const ebookCount = author.standalone_books.filter((b) => !b.media_type || b.media_type === "ebook").length;
+        const audiobookCount = author.standalone_books.filter((b) => b.media_type === "audiobook").length;
+        const comicCount = author.standalone_books.filter((b) => b.media_type === "comic").length;
+        const presentTypes = [
+          ebookCount > 0 && "ebook",
+          audiobookCount > 0 && "audiobook",
+          comicCount > 0 && "comic",
+        ].filter(Boolean) as string[];
+        const hasMultipleTypes = presentTypes.length > 1;
+
+        const summaryParts: string[] = [];
+        if (ebookCount > 0) summaryParts.push(`${ebookCount} eBook${ebookCount !== 1 ? "s" : ""}`);
+        if (audiobookCount > 0) summaryParts.push(`${audiobookCount} Audiobook${audiobookCount !== 1 ? "s" : ""}`);
+        if (comicCount > 0) summaryParts.push(`${comicCount} Comic${comicCount !== 1 ? "s" : ""}`);
+
+        const activeFilter = mediaFilter === "all" || !hasMultipleTypes ? "all" : mediaFilter;
+        const filteredBooks = activeFilter === "all"
+          ? author.standalone_books
+          : author.standalone_books.filter((b) => (b.media_type || "ebook") === activeFilter);
+
+        const tabs = [
+          { key: "all", label: "All" },
+          { key: "ebook", label: "eBooks", count: ebookCount },
+          { key: "audiobook", label: "Audiobooks", count: audiobookCount },
+          { key: "comic", label: "Comics", count: comicCount },
         ];
-        return groups
-          .filter((g) => g.books.length > 0)
-          .map((g) => (
-            <section key={g.key}>
-              <h2 className="text-lg font-semibold text-gray-200 mb-3">
-                {g.label}
+
+        return (
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-gray-200">
+                {hasMultipleTypes ? summaryParts.join(" · ") : summaryParts[0] || "Books"}
               </h2>
-              <div className="space-y-1">
-                {g.books.map((book) => (
-                  <BookRow key={book.id} book={book} authorName={author.name} onSearch={(title: string, auth: string, mt?: string) => setFindReleasesBook({ title, author: auth, mediaType: mt })} />
-                ))}
+            </div>
+
+            {hasMultipleTypes && (
+              <div className="flex gap-1 mb-3">
+                {tabs
+                  .filter((t) => t.key === "all" || (t.count && t.count > 0))
+                  .map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => setMediaFilter(t.key)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                        activeFilter === t.key
+                          ? "bg-indigo-500/20 text-indigo-400"
+                          : "text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
               </div>
-            </section>
-          ));
+            )}
+
+            <div className="space-y-1">
+              {filteredBooks.map((book) => (
+                <BookRow key={book.id} book={book} authorName={author.name} onSearch={(title: string, auth: string, mt?: string) => setFindReleasesBook({ title, author: auth, mediaType: mt })} />
+              ))}
+            </div>
+          </section>
+        );
       })()}
 
       {!isFetching && author.series.length === 0 && author.standalone_books.length === 0 && (
