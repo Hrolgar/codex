@@ -1,4 +1,5 @@
 import os
+import re
 import zipfile
 from collections import defaultdict
 from collections.abc import AsyncIterator
@@ -105,31 +106,76 @@ def _build_single_file_item(root: Path, full_path: Path, media_type: str) -> Sca
 
 
 def _infer_from_directory(root: Path, path: Path, item: ScannedItem, *, is_directory: bool) -> None:
-    """Infer author and series from directory structure relative to library root."""
+    """Infer author, series, and title from directory structure relative to library root.
+
+    Supported layouts (relative to root):
+        1 level  — Author/Book.epub         → author=Author, title from filename
+        2 levels — Author/Book/files        → author=Author, title=Book
+        3 levels — Author/Series/Book/files → author=Author, series=Series, title=Book
+    """
     try:
         relative = path.relative_to(root)
     except ValueError:
         return
 
     if is_directory:
-        # path IS the book directory (e.g. /media/audiobooks/Andy Weir/Artemis)
         parts = relative.parts
     else:
-        # path is a file — use parent directory parts
         parts = relative.parent.parts
 
     if len(parts) >= 1:
-        # Folder structure is intentional — always trust it for author name
         item.author = parts[0]
-    if len(parts) >= 2 and not item.series:
-        item.series = parts[1]
 
-    # Title: use directory name for audiobooks, filename stem for single files
-    if is_directory:
-        # Last part of the directory path is the book name
-        item.title = relative.parts[-1] if relative.parts else item.title
-    elif not item.title:
-        item.title = path.stem
+    if len(parts) >= 3:
+        # Author / Series / Book
+        if not item.series:
+            item.series = parts[1]
+        title_part = parts[2]
+        pos, clean_title = _parse_series_position(title_part)
+        if is_directory:
+            item.title = clean_title
+        elif not item.title:
+            item.title = path.stem
+        if pos is not None and item.series_position is None:
+            item.series_position = pos
+    elif len(parts) >= 2:
+        # Author / Book  (no series at this level)
+        if is_directory:
+            item.title = parts[-1]
+        elif not item.title:
+            item.title = path.stem
+    else:
+        # Author only — title from filename
+        if is_directory:
+            item.title = relative.parts[-1] if relative.parts else item.title
+        elif not item.title:
+            item.title = path.stem
+
+
+def _parse_series_position(name: str) -> tuple[float | None, str]:
+    """Extract a series position number from a directory/title name.
+
+    Returns (position, cleaned_title). If no position is found, returns (None, name).
+
+    Supported patterns:
+        '1 - Dune'        → (1.0, 'Dune')
+        '01 - Dune'       → (1.0, 'Dune')
+        '2.5 - Interlude' → (2.5, 'Interlude')
+        'Dune (Book 1)'   → (1.0, 'Dune')
+        'Dune (Book 02)'  → (2.0, 'Dune')
+    """
+    # Pattern: leading number — "01 - Title" or "1 - Title"
+    m = re.match(r"^(\d+(?:\.\d+)?)\s*[-–—]\s*(.+)$", name)
+    if m:
+        return float(m.group(1)), m.group(2).strip()
+
+    # Pattern: trailing "(Book N)" or "(Book N)"
+    m = re.search(r"\(Book\s+(\d+(?:\.\d+)?)\)\s*$", name, re.IGNORECASE)
+    if m:
+        title = name[: m.start()].strip()
+        return float(m.group(1)), title
+
+    return None, name
 
 
 def _sum_audio_durations(audio_files: list[Path]) -> int | None:

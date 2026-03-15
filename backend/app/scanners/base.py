@@ -14,6 +14,7 @@ class ScannedItem:
     duration_seconds: int | None = None
     cover_url: str | None = None
     series: str | None = None
+    series_position: float | None = None
     media_type: str = "ebook"
     file_count: int | None = None
     is_directory: bool = False
