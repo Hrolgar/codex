@@ -98,9 +98,11 @@ def _work_matches_language(entry: dict, editions: list[dict], allowed: set[str])
             if code in allowed:
                 return True
 
-    # If no language info at all, EXCLUDE the work — users who set language
-    # preferences expect filtering.  Books in their language will almost always
-    # have at least one edition with language metadata on OpenLibrary.
+    # No language info at all — include the work (don't exclude unknowns)
+    if not work_langs and not any(ed.get("languages") for ed in editions):
+        return True
+
+    # Had language info but none matched
     return False
 
 OL_BASE = "https://openlibrary.org"
@@ -224,6 +226,7 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
     allowed_languages = _parse_language_codes(lang_raw)
 
     added = 0
+    excluded_languages = 0
     async with httpx.AsyncClient(timeout=15) as client:
         # Fetch all works
         works_data = await _ol_get(
@@ -254,6 +257,7 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                             "Skipping work %r — title suggests language %r not in %s",
                             work_title, detected, allowed_languages,
                         )
+                        excluded_languages += 1
                         continue
 
                 # Check for existing book by OpenLibrary work key first (cheap DB lookup)
@@ -281,6 +285,7 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                     )
                     if not _work_matches_language(entry, edition_entries, allowed_languages):
                         logger.debug("Skipping work %r — language not in allowed list %s", work_title, allowed_languages)
+                        excluded_languages += 1
                         continue
 
                 # Check for duplicates by title + author
@@ -372,6 +377,12 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
             except Exception:
                 logger.warning("Failed to process work: %s", entry.get("title", "unknown"), exc_info=True)
                 continue
+
+    if excluded_languages:
+        logger.info(
+            "Excluded %d works for author %s due to language filter (allowed: %s)",
+            excluded_languages, author.name, allowed_languages,
+        )
 
     author.catalog_status = "complete"
     await db.commit()
