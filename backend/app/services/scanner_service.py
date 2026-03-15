@@ -16,20 +16,27 @@ logger = logging.getLogger(__name__)
 
 async def run_scan(root_folder_id: uuid.UUID) -> None:
     """Background task: scan a root folder and create/update records."""
+    logger.info("Starting scan for root folder %s", root_folder_id)
     async with async_session() as db:
         root_folder = await db.get(RootFolder, root_folder_id)
         if not root_folder:
+            logger.warning("Root folder %s not found, skipping scan", root_folder_id)
             return
 
+        logger.info("Scanning path: %s", root_folder.path)
         scanner = FilesystemScanner()
         root_folder.scan_status = "scanning"
         await db.commit()
 
+        items_found = 0
         try:
             config = {"path": root_folder.path}
             async for scanned in scanner.scan(config):
+                items_found += 1
+                logger.info("Found: %s by %s (%s)", scanned.title, scanned.author, scanned.file_path)
                 await _process_item(db, root_folder, scanned)
             root_folder.scan_status = "idle"
+            logger.info("Scan complete for %s: %d items found", root_folder.path, items_found)
         except Exception:
             logger.exception("Scan failed for root folder %s", root_folder_id)
             root_folder.scan_status = "error"

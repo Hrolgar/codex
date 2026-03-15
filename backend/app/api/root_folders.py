@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Keep references to background tasks to prevent garbage collection
+_background_tasks: set = set()
+
 def _validate_root_folder_path(path: str) -> None:
     """Validate that a root folder path is absolute and exists."""
     pass  # Path existence is checked separately in the create endpoint
@@ -184,7 +187,9 @@ async def create_root_folder(data: RootFolderCreate, db: AsyncSession = Depends(
     await db.refresh(folder)
 
     # Auto-trigger a scan in the background
-    asyncio.create_task(run_scan(folder.id))
+    task = asyncio.create_task(run_scan(folder.id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     total, free = _get_disk_usage(folder.path)
     return RootFolderResponse(
@@ -208,7 +213,9 @@ async def trigger_scan(folder_id: uuid.UUID, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=404, detail="Root folder not found")
     if folder.scan_status == "scanning":
         raise HTTPException(status_code=409, detail="Scan already in progress")
-    asyncio.create_task(run_scan(folder.id))
+    task = asyncio.create_task(run_scan(folder.id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return {"status": "scanning"}
 
 
