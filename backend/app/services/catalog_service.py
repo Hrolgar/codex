@@ -306,50 +306,87 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
     if not author.openlibrary_key:
         return 0
 
+    # Check which provider to use
     provider = await get_setting(db, 'search.book_provider') or 'openlibrary'
 
     if provider == 'hardcover':
-        api_key = await get_setting(db, 'metadata.hardcover.api_key')
-        if api_key and author.openlibrary_key:  # slug stored here
-            from app.metadata.hardcover import get_author_books, classify_media_type
-            author.catalog_status = "fetching"
-            await db.commit()
+        return await _refresh_via_hardcover(db, author)
 
-            hc_books = await get_author_books(api_key, author.openlibrary_key)
-            languages_raw = await get_setting(db, 'general.languages')
-            languages = [l.strip() for l in (languages_raw or 'en').split(',') if l.strip()]
-
-            for hc_book in hc_books:
-                title = hc_book.get('title', '')
-                if not title:
-                    continue
-                media_type = classify_media_type(hc_book)
-                cover_url = hc_book.get('image', {}).get('url', '')
-                year = hc_book.get('release_year')
-
-                # Check for duplicate
-                is_dup, _, _ = await check_duplicate(db, title=title, author=author.name)
-                if is_dup:
-                    continue
-
-                book = Book(title=title, media_type=media_type, cover_url=cover_url, publish_year=year, monitored=True)
-                db.add(book)
-                await db.flush()
-
-                # Create editions per enabled language
-                for lang in languages:
-                    db.add(Edition(book_id=book.id, language=lang, format='epub' if media_type == 'ebook' else 'm4b', media_type=media_type))
-                await db.flush()
-
-                await link_book_author(db, book.id, author.id)
-                added += 1
-
-            author.catalog_status = 'complete'
-            await db.commit()
-            return added
-    elif provider == 'google':
+    if provider == 'google':
         logger.info("Google Books catalog provider not yet implemented, falling back to OpenLibrary")
 
+    return await _refresh_via_openlibrary(db, author)
+
+
+async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
+    """Fetch catalog for an author via Hardcover API."""
+    api_key = await get_setting(db, 'metadata.hardcover.api_key')
+    if not api_key:
+        logger.warning('Hardcover API key not configured, falling back to OpenLibrary')
+        return await _refresh_via_openlibrary(db, author)
+
+    slug = author.openlibrary_key  # We store Hardcover slug here
+    if not slug:
+        logger.warning('No Hardcover slug for author %s', author.name)
+        author.catalog_status = 'error'
+        await db.commit()
+        return 0
+
+    from app.metadata.hardcover import get_author_books, classify_media_type
+
+    author.catalog_status = 'fetching'
+    await db.commit()
+
+    try:
+        hc_books = await get_author_books(api_key, slug)
+    except Exception as e:
+        logger.error('Hardcover catalog fetch failed for %s: %s', author.name, e)
+        author.catalog_status = 'error'
+        await db.commit()
+        return 0
+
+    languages_raw = await get_setting(db, 'general.languages')
+    languages = [l.strip() for l in (languages_raw or 'en').split(',') if l.strip()]
+
+    added = 0
+    for hc_book in hc_books:
+        title = hc_book.get('title', '')
+        if not title:
+            continue
+
+        media_type = classify_media_type(hc_book)
+        cover_url = (hc_book.get('image') or {}).get('url', '')
+        year = hc_book.get('release_year')
+
+        # Get first author name from contributions
+        contribs = hc_book.get('contributions', [])
+        book_author = contribs[0].get('author', {}).get('name', '') if contribs else author.name
+
+        is_dup, _, _ = await check_duplicate(db, title=title, author=book_author)
+        if is_dup:
+            continue
+
+        book = Book(title=title, media_type=media_type, cover_url=cover_url, publish_year=year, monitored=True)
+        db.add(book)
+        await db.flush()
+
+        # Create edition slots per language
+        fmt = 'epub' if media_type == 'ebook' else 'm4b' if media_type == 'audiobook' else 'cbz'
+        for lang in languages:
+            db.add(Edition(book_id=book.id, language=lang, format=fmt, media_type=media_type))
+        await db.flush()
+
+        await link_book_author(db, book.id, author.id)
+        added += 1
+
+    author.catalog_status = 'complete'
+    await db.commit()
+    logger.info('Hardcover catalog: added %d books for %s', added, author.name)
+    return added
+
+
+async def _refresh_via_openlibrary(db: AsyncSession, author: Author) -> int:
+    """Fetch catalog for an author via OpenLibrary API."""
     author.catalog_status = "fetching"
     await db.commit()
 
