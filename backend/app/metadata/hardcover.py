@@ -23,16 +23,69 @@ async def _query(api_key: str, query: str, variables: dict | None = None) -> dic
         return resp.json()
 
 
+# ---------------------------------------------------------------------------
+# search() returns jsonb `results` — no inline fragments allowed.
+# We request `results` as a plain scalar and parse the JSON ourselves.
+# For books we do a follow-up query to get typed Book objects.
+# ---------------------------------------------------------------------------
+
+_SEARCH_IDS_QUERY = '''
+query SearchIDs($q: String!, $queryType: String!, $perPage: Int!) {
+  search(query: $q, query_type: $queryType, per_page: $perPage) {
+    results
+  }
+}'''
+
+_BOOKS_BY_IDS_QUERY = '''
+query BooksByIDs($ids: [Int!]!) {
+  books(where: {id: {_in: $ids}}) {
+    id title slug release_year
+    image { url }
+    contributions { author { name } }
+    editions {
+      format
+      language { language }
+      isbn_13 isbn_10 asin
+      audio_seconds
+      pages
+      release_year
+    }
+  }
+}'''
+
+_BOOKS_BY_IDS_FULL_QUERY = '''
+query BooksByIDsFull($ids: [Int!]!) {
+  books(where: {id: {_in: $ids}}) {
+    id title subtitle description
+    image { url }
+    contributions { author { name } }
+    editions {
+      isbn_13 isbn_10 pages
+      language { language }
+      release_date
+    }
+    book_series { series { name } position_in_series }
+  }
+}'''
+
+
 async def search_author(api_key: str, name: str) -> dict | None:
-    query = '''
-    query SearchAuthor($q: String!) {
-      search(query: $q, query_type: "authors", per_page: 1) {
-        results { ... on Author { id name slug bio image { url } } }
-      }
-    }'''
-    data = await _query(api_key, query, {'q': name})
+    """Search for an author by name. Returns author data from jsonb results."""
+    data = await _query(api_key, _SEARCH_IDS_QUERY, {
+        'q': name, 'queryType': 'authors', 'perPage': 1,
+    })
     results = data.get('data', {}).get('search', {}).get('results', [])
-    return results[0] if results else None
+    if not results:
+        return None
+    hit = results[0]
+    # jsonb results for authors contain: name, slug, image, etc.
+    # Normalize image to nested dict format callers expect (image.url)
+    image_val = hit.get('image')
+    if isinstance(image_val, str):
+        hit['image'] = {'url': image_val}
+    elif not isinstance(image_val, dict):
+        hit['image'] = {}
+    return hit
 
 
 async def get_author_books(api_key: str, author_slug: str) -> list[dict]:
@@ -66,24 +119,21 @@ async def get_author_books(api_key: str, author_slug: str) -> list[dict]:
 
 
 async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dict]:
-    gql = '''
-    query SearchBooks($q: String!, $perPage: Int!) {
-      search(query: $q, query_type: "books", per_page: $perPage) {
-        results {
-          ... on Book {
-            id title slug release_year
-            image { url }
-            contributions { author { name } }
-            editions {
-              format language { language }
-              isbn_13 isbn_10 asin audio_seconds pages
-            }
-          }
-        }
-      }
-    }'''
-    data = await _query(api_key, gql, {'q': query, 'perPage': per_page})
-    return data.get('data', {}).get('search', {}).get('results', [])
+    """Two-step search: get IDs from jsonb results, then fetch typed Book objects."""
+    data = await _query(api_key, _SEARCH_IDS_QUERY, {
+        'q': query, 'queryType': 'books', 'perPage': per_page,
+    })
+    results = data.get('data', {}).get('search', {}).get('results', [])
+    if not results:
+        return []
+    ids = [r['id'] for r in results if r.get('id')]
+    if not ids:
+        return []
+    books_data = await _query(api_key, _BOOKS_BY_IDS_QUERY, {'ids': ids})
+    books = books_data.get('data', {}).get('books', [])
+    # Preserve search result ordering
+    book_map = {b['id']: b for b in books}
+    return [book_map[i] for i in ids if i in book_map]
 
 
 def classify_media_type(book: dict) -> str:
@@ -99,29 +149,13 @@ def classify_media_type(book: dict) -> str:
 # Provider class used by MetadataService
 # ---------------------------------------------------------------------------
 
-SEARCH_QUERY = """
-query SearchBooks($query: String!) {
-  search(query: $query, query_type: "books", per_page: 10) {
-    results {
-      ... on Book {
-        id title subtitle description
-        image { url }
-        contributions { author { name } }
-        editions { isbn_13 isbn_10 pages language release_date }
-        book_series { series { name } position_in_series }
-      }
-    }
-  }
-}
-"""
-
 ISBN_QUERY = """
 query LookupISBN($isbn: String!) {
   books(where: {editions: {isbn_13: {_eq: $isbn}}}, limit: 1) {
     id title subtitle description
     image { url }
     contributions { author { name } }
-    editions { isbn_13 isbn_10 pages language release_date }
+    editions { isbn_13 isbn_10 pages language { language } release_date }
     book_series { series { name } position_in_series }
   }
 }
@@ -143,8 +177,12 @@ def _parse_book(book: dict) -> MetadataResult:
             isbn_10 = edition["isbn_10"]
         if not page_count and edition.get("pages"):
             page_count = edition["pages"]
-        if not language and edition.get("language"):
-            language = edition["language"]
+        if not language:
+            lang = edition.get("language")
+            if isinstance(lang, dict):
+                language = lang.get("language")
+            elif isinstance(lang, str):
+                language = lang
         if not publish_year and edition.get("release_date"):
             rd = str(edition["release_date"])
             if rd[:4].isdigit():
@@ -184,9 +222,23 @@ class HardcoverProvider:
     async def search(self, title: str, author: str | None = None) -> list[MetadataResult]:
         try:
             query_str = f"{title} {author}" if author else title
-            data = await _query(self.api_key, SEARCH_QUERY, {"query": query_str})
-            books = data.get("data", {}).get("search", {}).get("results", [])
-            return [_parse_book(b) for b in books]
+            # Step 1: search for IDs via jsonb results
+            data = await _query(self.api_key, _SEARCH_IDS_QUERY, {
+                'q': query_str, 'queryType': 'books', 'perPage': 10,
+            })
+            results = data.get("data", {}).get("search", {}).get("results", [])
+            if not results:
+                return []
+            ids = [r['id'] for r in results if r.get('id')]
+            if not ids:
+                return []
+            # Step 2: fetch typed Book objects by ID
+            books_data = await _query(self.api_key, _BOOKS_BY_IDS_FULL_QUERY, {'ids': ids})
+            books = books_data.get("data", {}).get("books", [])
+            # Preserve search ordering
+            book_map = {b['id']: b for b in books}
+            ordered = [book_map[i] for i in ids if i in book_map]
+            return [_parse_book(b) for b in ordered]
         except Exception:
             logger.warning("Hardcover search failed for %r", title, exc_info=True)
             return []
