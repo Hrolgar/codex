@@ -475,12 +475,20 @@ function GeneralSection() {
 }
 
 function renderTemplatePreview(template: string, data: Record<string, string>): string {
-  return template
-    .replace(/\{(\w+)\?([^}]*)\}/g, (_match, token: string, inner: string) => {
-      if (!data[token]) return "";
-      return inner.replace(/\{(\w+)\}/g, (_m: string, t: string) => data[t] ?? "");
-    })
-    .replace(/\{(\w+)\}/g, (_match, token: string) => data[token] ?? "");
+  let result = template;
+
+  // Process conditionals: {Token?content_if_present} (content may contain nested {Token} refs)
+  result = result.replace(/\{(\w+)\?((?:[^{}]|\{[^}]*\})*)\}/g, (_match, token: string, content: string) => {
+    const val = data[token] || "";
+    if (!val) return "";
+    return content.replace(/\{(\w+)\}/g, (_m: string, t: string) => data[t] ?? "");
+  });
+
+  // Process remaining tokens (supports optional :width suffix like {Title:50})
+  result = result.replace(/\{(\w[\w ]*?)(?::\d+)?\}/g, (_match, token: string) => data[token] ?? "");
+
+  // Clean up double slashes
+  return result.replace(/\/+/g, "/").replace(/^\/|\/$/g, "");
 }
 
 const SERIES_SAMPLE: Record<string, string> = {
@@ -498,10 +506,10 @@ const SERIES_SAMPLE: Record<string, string> = {
 
 const STANDALONE_SAMPLE: Record<string, string> = {
   Author: "Brandon Sanderson",
-  Title: "The Way of Kings",
+  Title: "Elantris",
   Series: "",
   SeriesPosition: "",
-  Year: "2010",
+  Year: "2005",
   Language: "en",
   Edition: "Norwegian",
   Format: "epub",
@@ -1084,35 +1092,70 @@ function DownloadClientsSection() {
 }
 
 function SearchModeSection() {
+  const ss = useSettingsStore();
+  const [mode, setMode] = useState("universal");
+  const [bookProvider, setBookProvider] = useState("openlibrary");
+  const [audiobookProvider, setAudiobookProvider] = useState("book");
+  const [defaultSource, setDefaultSource] = useState("prowlarr");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (ss.loaded) {
+      setMode(ss.get("search.mode", "universal"));
+      setBookProvider(ss.get("search.book_provider", "openlibrary"));
+      setAudiobookProvider(ss.get("search.audiobook_provider", "book"));
+      setDefaultSource(ss.get("search.default_source", "prowlarr"));
+    }
+  }, [ss.loaded, ss.get]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await ss.save({
+        "search.mode": mode,
+        "search.book_provider": bookProvider,
+        "search.audiobook_provider": audiobookProvider,
+        "search.default_source": defaultSource,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectClass = "w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500";
+
   return (
     <SettingsSection title="Search Mode" description="How you want to search for and download books.">
       <Field label="Search Mode" description="Direct mode searches web sources and downloads immediately. Universal mode supports Prowlarr, IRC and audiobooks with metadata-based searching.">
-        <select defaultValue="universal" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500">
+        <select value={mode} onChange={(e) => setMode(e.target.value)} className={selectClass}>
           <option value="direct">Direct</option>
           <option value="universal">Universal</option>
         </select>
       </Field>
       <Field label="Book Metadata Provider" description="Choose which metadata provider to use for book searches.">
-        <select defaultValue="openlibrary" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500">
+        <select value={bookProvider} onChange={(e) => setBookProvider(e.target.value)} className={selectClass}>
           <option value="hardcover">Hardcover</option>
           <option value="openlibrary">Open Library</option>
           <option value="google">Google Books</option>
         </select>
       </Field>
       <Field label="Audiobook Metadata Provider" description="Metadata provider for audiobook searches. Uses the book provider if not set.">
-        <select defaultValue="book" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500">
+        <select value={audiobookProvider} onChange={(e) => setAudiobookProvider(e.target.value)} className={selectClass}>
           <option value="book">Use book provider</option>
           <option value="hardcover">Hardcover</option>
           <option value="openlibrary">Open Library</option>
         </select>
       </Field>
       <Field label="Default Release Source" description="The release source tab to open by default in the release modal.">
-        <select defaultValue="direct" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500">
+        <select value={defaultSource} onChange={(e) => setDefaultSource(e.target.value)} className={selectClass}>
           <option value="direct">Direct Download</option>
           <option value="prowlarr">Prowlarr</option>
           <option value="audiobookbay">AudiobookBay</option>
         </select>
       </Field>
+      <button onClick={handleSave} disabled={saving} className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+        {saving ? "Saving..." : "Save"}
+      </button>
     </SettingsSection>
   );
 }
@@ -1152,7 +1195,7 @@ function IntegrationCategory({ category, queryClient }: { category: SettingsCate
 
 function AdvancedSection({ categories }: { categories: SettingsCategory[] | undefined }) {
   const queryClient = useQueryClient();
-  const HANDLED_CATEGORIES = ['prowlarr', 'hardcover', 'openlibrary', 'google', 'general', 'downloads'];
+  const HANDLED_CATEGORIES = ['prowlarr', 'hardcover', 'openlibrary', 'google', 'google_books', 'metadata', 'general', 'downloads', 'downloadclient', 'audiobookshelf', 'search'];
   const filtered = categories?.filter(cat => !HANDLED_CATEGORIES.includes(cat.category));
   return (
     <SettingsSection title="Advanced" description="Integration settings stored in the database.">
