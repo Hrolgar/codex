@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getProwlarrIndexers,
@@ -758,7 +758,7 @@ function DownloadClientsSection() {
     queryFn: getSettings,
   });
 
-  useState(() => {
+  useEffect(() => {
     if (!settingsCategories) return;
     const allSettings: Record<string, string> = {};
     for (const cat of settingsCategories) {
@@ -779,7 +779,7 @@ function DownloadClientsSection() {
     if (allSettings["downloadclient.sabnzbd.category.ebook"]) setSabCategoryEbook(allSettings["downloadclient.sabnzbd.category.ebook"]);
     if (allSettings["downloadclient.sabnzbd.category.audiobook"]) setSabCategoryAudiobook(allSettings["downloadclient.sabnzbd.category.audiobook"]);
     if (allSettings["downloadclient.sabnzbd.category.comic"]) setSabCategoryComic(allSettings["downloadclient.sabnzbd.category.comic"]);
-  });
+  }, [settingsCategories]);
 
   const saveMutation = useMutation({
     mutationFn: (settings: Record<string, string>) => updateSettings(settings),
