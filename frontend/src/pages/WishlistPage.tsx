@@ -21,7 +21,7 @@ export default function WishlistPage() {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title: "", author: "", isbn: "", media_type: "", auto_download: true });
+  const [form, setForm] = useState({ search_title: "", search_author: "", auto_download: true });
 
   const { data: items, isLoading } = useQuery({
     queryKey: ["wishlist"],
@@ -33,7 +33,7 @@ export default function WishlistPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wishlist"] });
       setShowAdd(false);
-      setForm({ title: "", author: "", isbn: "", media_type: "", auto_download: true });
+      setForm({ search_title: "", search_author: "", auto_download: true });
       addToast("Added to wishlist");
     },
     onError: () => addToast("Failed to add to wishlist", "error"),
@@ -57,12 +57,10 @@ export default function WishlistPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
+    if (!form.search_title.trim()) return;
     addMutation.mutate({
-      title: form.title.trim(),
-      author: form.author.trim() || undefined,
-      isbn: form.isbn.trim() || undefined,
-      media_type: form.media_type || undefined,
+      search_title: form.search_title.trim(),
+      search_author: form.search_author.trim() || undefined,
       auto_download: form.auto_download,
     });
   };
@@ -112,8 +110,8 @@ export default function WishlistPage() {
               <label className="block text-sm text-gray-400 mb-1">Title *</label>
               <input
                 type="text"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                value={form.search_title}
+                onChange={(e) => setForm({ ...form, search_title: e.target.value })}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
                 placeholder="Book title"
                 autoFocus
@@ -123,33 +121,11 @@ export default function WishlistPage() {
               <label className="block text-sm text-gray-400 mb-1">Author</label>
               <input
                 type="text"
-                value={form.author}
-                onChange={(e) => setForm({ ...form, author: e.target.value })}
+                value={form.search_author}
+                onChange={(e) => setForm({ ...form, search_author: e.target.value })}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
                 placeholder="Author name"
               />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">ISBN</label>
-              <input
-                type="text"
-                value={form.isbn}
-                onChange={(e) => setForm({ ...form, isbn: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
-                placeholder="ISBN (optional)"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Media Type</label>
-              <select
-                value={form.media_type}
-                onChange={(e) => setForm({ ...form, media_type: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
-              >
-                <option value="">Any</option>
-                <option value="ebook">eBook</option>
-                <option value="audiobook">Audiobook</option>
-              </select>
             </div>
           </div>
           <div className="flex items-center justify-between">
@@ -164,7 +140,7 @@ export default function WishlistPage() {
             </label>
             <button
               type="submit"
-              disabled={addMutation.isPending || !form.title.trim()}
+              disabled={addMutation.isPending || !form.search_title.trim()}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               {addMutation.isPending ? "Adding..." : "Add to Wishlist"}
@@ -240,11 +216,10 @@ function WishlistRow({
   return (
     <tr className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
       <td className="px-4 py-3">
-        <p className="text-gray-100 font-medium">{item.title}</p>
-        {item.isbn && <p className="text-xs text-gray-500 mt-0.5">ISBN: {item.isbn}</p>}
+        <p className="text-gray-100 font-medium">{item.search_title}</p>
       </td>
       <td className="px-4 py-3 text-gray-400 hidden sm:table-cell">
-        {item.author ?? "—"}
+        {item.search_author ?? "—"}
       </td>
       <td className="px-4 py-3">
         <span

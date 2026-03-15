@@ -35,8 +35,8 @@ export default function SearchPage() {
 
   const handleWishlist = (result: SearchResult) => {
     wishlistMutation.mutate({
-      title: result.title,
-      author: result.author ?? "",
+      search_title: result.title,
+      search_author: result.author ?? "",
     });
   };
 

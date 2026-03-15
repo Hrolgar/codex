@@ -320,22 +320,19 @@ export function clearDemoData() {
 // Wishlist types & functions
 export interface WishlistItem {
   id: string;
-  title: string;
-  author: string | null;
-  isbn: string | null;
-  media_type: string | null;
+  book_id: string | null;
+  search_title: string | null;
+  search_author: string | null;
   status: "waiting" | "found" | "downloading" | "complete";
   auto_download: boolean;
-  source: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface WishlistCreate {
-  title: string;
-  author?: string;
-  isbn?: string;
-  media_type?: string;
+  book_id?: string;
+  search_title: string;
+  search_author?: string;
   auto_download?: boolean;
 }
 
