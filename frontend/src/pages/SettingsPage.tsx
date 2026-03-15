@@ -28,6 +28,8 @@ import {
   ChevronRight,
   Zap,
   Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 // --- Sidebar nav items ---
