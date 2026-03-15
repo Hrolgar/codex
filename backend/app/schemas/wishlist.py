@@ -8,7 +8,7 @@ from app.schemas.book import BookListItem
 
 class WishlistCreate(BaseModel):
     book_id: uuid.UUID | None = None
-    search_title: str
+    search_title: str | None = None
     search_author: str | None = None
     auto_download: bool = False
 

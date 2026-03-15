@@ -29,3 +29,4 @@ docker-compose.override.yml
 data/
 covers/
 frontend/tsconfig.tsbuildinfo
+backend/venv/
