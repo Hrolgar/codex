@@ -9,6 +9,7 @@ import {
 import { Trash2, Plus, Loader2, FolderOpen, HardDrive } from "lucide-react";
 
 function formatBytes(bytes: number) {
+  if (bytes == null || isNaN(bytes)) return "Unknown";
   if (bytes === 0) return "0 B";
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB"];
@@ -16,12 +17,12 @@ function formatBytes(bytes: number) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
-const MEDIA_TYPES = ["book", "audiobook", "ebook", "comic", "magazine"];
+const MEDIA_TYPES = ["ebook", "audiobook", "comic"];
 
 export default function RootFoldersSection() {
   const queryClient = useQueryClient();
   const [path, setPath] = useState("");
-  const [mediaType, setMediaType] = useState("book");
+  const [mediaType, setMediaType] = useState("ebook");
   const [isDefault, setIsDefault] = useState(false);
 
   const { data: folders = [], isLoading } = useQuery({
@@ -34,7 +35,7 @@ export default function RootFoldersSection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["root-folders"] });
       setPath("");
-      setMediaType("book");
+      setMediaType("ebook");
       setIsDefault(false);
     },
   });
@@ -49,8 +50,11 @@ export default function RootFoldersSection() {
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!path.trim()) return;
+    const trimmedPath = path.trim();
+    const name = trimmedPath.split("/").filter(Boolean).pop() || trimmedPath;
     addMutation.mutate({
-      path: path.trim(),
+      path: trimmedPath,
+      name,
       media_type: mediaType,
       default: isDefault,
     });
@@ -78,11 +82,11 @@ export default function RootFoldersSection() {
       ) : (
         <div className="space-y-2">
           {folders.map((folder: RootFolder) => {
-            const usedSpace = folder.total_space - folder.free_space;
-            const usedPct =
-              folder.total_space > 0
-                ? Math.round((usedSpace / folder.total_space) * 100)
-                : 0;
+            const hasSpace = folder.total_space != null && folder.free_space != null && folder.total_space > 0;
+            const usedSpace = hasSpace ? folder.total_space - folder.free_space : 0;
+            const usedPct = hasSpace
+              ? Math.round((usedSpace / folder.total_space) * 100)
+              : 0;
 
             return (
               <div
@@ -109,7 +113,7 @@ export default function RootFoldersSection() {
                       <p className="text-xs text-gray-500 mt-0.5 truncate">
                         {folder.path}
                       </p>
-                      {folder.total_space > 0 && (
+                      {hasSpace ? (
                         <div className="mt-2">
                           <div className="flex items-center gap-2 text-[11px] text-gray-400 mb-1">
                             <span>
@@ -130,6 +134,8 @@ export default function RootFoldersSection() {
                             />
                           </div>
                         </div>
+                      ) : (
+                        <p className="text-[11px] text-gray-500 mt-1">Disk space: Unknown</p>
                       )}
                     </div>
                   </div>
