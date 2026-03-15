@@ -54,7 +54,7 @@ async def list_authors(
             func.count(BookAuthor.book_id).label("book_count"),
             owned_count_sub,
         )
-        .join(BookAuthor, Author.id == BookAuthor.author_id)
+        .outerjoin(BookAuthor, Author.id == BookAuthor.author_id)
         .group_by(Author.id)
     )
 

@@ -155,7 +155,9 @@ export function getHealth() {
 export function getAuthors(search?: string) {
   const query = new URLSearchParams();
   if (search) query.set("search", search);
-  return request<AuthorListItem[]>(`/authors?${query}`);
+  return request<{ items: AuthorListItem[]; total: number }>(`/authors?${query}`).then(
+    (res) => res.items
+  );
 }
 
 export function getAuthor(id: string) {
