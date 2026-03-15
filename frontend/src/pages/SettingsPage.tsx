@@ -525,6 +525,168 @@ function ProwlarrSection() {
   );
 }
 
+function DownloadClientsSection() {
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
+  // qBittorrent state
+  const [qbtEnabled, setQbtEnabled] = useState(false);
+  const [qbtUrl, setQbtUrl] = useState("");
+  const [qbtUsername, setQbtUsername] = useState("");
+  const [qbtPassword, setQbtPassword] = useState("");
+  const [qbtCategory, setQbtCategory] = useState("codex");
+  const [qbtTesting, setQbtTesting] = useState(false);
+  const [qbtTestResult, setQbtTestResult] = useState<string | null>(null);
+
+  // SABnzbd state
+  const [sabEnabled, setSabEnabled] = useState(false);
+  const [sabUrl, setSabUrl] = useState("");
+  const [sabApiKey, setSabApiKey] = useState("");
+  const [sabCategory, setSabCategory] = useState("codex");
+  const [sabTesting, setSabTesting] = useState(false);
+  const [sabTestResult, setSabTestResult] = useState<string | null>(null);
+
+  // Load saved settings
+  const { data: settingsCategories } = useQuery({
+    queryKey: ["settings"],
+    queryFn: getSettings,
+  });
+
+  useState(() => {
+    if (!settingsCategories) return;
+    const allSettings: Record<string, string> = {};
+    for (const cat of settingsCategories) {
+      for (const s of cat.settings) {
+        allSettings[s.key] = s.value ?? "";
+      }
+    }
+    if (allSettings["downloadclient.qbittorrent.enabled"] === "true") setQbtEnabled(true);
+    if (allSettings["downloadclient.qbittorrent.url"]) setQbtUrl(allSettings["downloadclient.qbittorrent.url"]);
+    if (allSettings["downloadclient.qbittorrent.username"]) setQbtUsername(allSettings["downloadclient.qbittorrent.username"]);
+    if (allSettings["downloadclient.qbittorrent.password"]) setQbtPassword(allSettings["downloadclient.qbittorrent.password"]);
+    if (allSettings["downloadclient.qbittorrent.category"]) setQbtCategory(allSettings["downloadclient.qbittorrent.category"]);
+    if (allSettings["downloadclient.sabnzbd.enabled"] === "true") setSabEnabled(true);
+    if (allSettings["downloadclient.sabnzbd.url"]) setSabUrl(allSettings["downloadclient.sabnzbd.url"]);
+    if (allSettings["downloadclient.sabnzbd.api_key"]) setSabApiKey(allSettings["downloadclient.sabnzbd.api_key"]);
+    if (allSettings["downloadclient.sabnzbd.category"]) setSabCategory(allSettings["downloadclient.sabnzbd.category"]);
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (settings: Record<string, string>) => updateSettings(settings),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      addToast("Settings saved");
+    },
+    onError: () => addToast("Failed to save settings", "error"),
+  });
+
+  const saveQbt = () => {
+    saveMutation.mutate({
+      "downloadclient.qbittorrent.enabled": String(qbtEnabled),
+      "downloadclient.qbittorrent.url": qbtUrl,
+      "downloadclient.qbittorrent.username": qbtUsername,
+      "downloadclient.qbittorrent.password": qbtPassword,
+      "downloadclient.qbittorrent.category": qbtCategory,
+    });
+  };
+
+  const saveSab = () => {
+    saveMutation.mutate({
+      "downloadclient.sabnzbd.enabled": String(sabEnabled),
+      "downloadclient.sabnzbd.url": sabUrl,
+      "downloadclient.sabnzbd.api_key": sabApiKey,
+      "downloadclient.sabnzbd.category": sabCategory,
+    });
+  };
+
+  const testConnection = async (provider: "qbittorrent" | "sabnzbd") => {
+    const setTesting = provider === "qbittorrent" ? setQbtTesting : setSabTesting;
+    const setResult = provider === "qbittorrent" ? setQbtTestResult : setSabTestResult;
+    setTesting(true);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/system/settings/test-connection?provider=${provider}`);
+      if (res.ok) {
+        setResult("Connection successful");
+      } else {
+        const data = await res.json().catch(() => null);
+        setResult(data?.error ?? "Connection failed");
+      }
+    } catch {
+      setResult("Connection failed");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <SettingsSection title="Download Clients" description="Configure download clients for fetching releases.">
+      {/* qBittorrent */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">qBittorrent</h3>
+        <Toggle checked={qbtEnabled} onChange={setQbtEnabled} label="Enable qBittorrent" description="Use qBittorrent as a torrent download client" />
+        {qbtEnabled && (
+          <>
+            <Field label="URL" required description="Base URL of your qBittorrent WebUI">
+              <input type="text" value={qbtUrl} onChange={(e) => setQbtUrl(e.target.value)} placeholder="http://localhost:8080" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            </Field>
+            <Field label="Username">
+              <input type="text" value={qbtUsername} onChange={(e) => setQbtUsername(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            </Field>
+            <Field label="Password">
+              <SecretInput value={qbtPassword} onChange={setQbtPassword} />
+            </Field>
+            <Field label="Category" description="Torrent category to assign in qBittorrent">
+              <input type="text" value={qbtCategory} onChange={(e) => setQbtCategory(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            </Field>
+            <div className="flex items-center gap-3">
+              <button onClick={() => testConnection("qbittorrent")} disabled={qbtTesting} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2">
+                {qbtTesting && <Loader2 size={14} className="animate-spin" />}
+                Test Connection
+              </button>
+              <button onClick={saveQbt} disabled={saveMutation.isPending} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                {saveMutation.isPending ? "Saving..." : "Save"}
+              </button>
+              {qbtTestResult && <span className="text-sm text-gray-400">{qbtTestResult}</span>}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="border-t border-gray-800" />
+
+      {/* SABnzbd */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">SABnzbd</h3>
+        <Toggle checked={sabEnabled} onChange={setSabEnabled} label="Enable SABnzbd" description="Use SABnzbd as a Usenet download client" />
+        {sabEnabled && (
+          <>
+            <Field label="URL" required description="Base URL of your SABnzbd instance">
+              <input type="text" value={sabUrl} onChange={(e) => setSabUrl(e.target.value)} placeholder="http://localhost:8080" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            </Field>
+            <Field label="API Key" required>
+              <SecretInput value={sabApiKey} onChange={setSabApiKey} placeholder="Your SABnzbd API key" />
+            </Field>
+            <Field label="Category" description="Category to assign in SABnzbd">
+              <input type="text" value={sabCategory} onChange={(e) => setSabCategory(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            </Field>
+            <div className="flex items-center gap-3">
+              <button onClick={() => testConnection("sabnzbd")} disabled={sabTesting} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2">
+                {sabTesting && <Loader2 size={14} className="animate-spin" />}
+                Test Connection
+              </button>
+              <button onClick={saveSab} disabled={saveMutation.isPending} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                {saveMutation.isPending ? "Saving..." : "Save"}
+              </button>
+              {sabTestResult && <span className="text-sm text-gray-400">{sabTestResult}</span>}
+            </div>
+          </>
+        )}
+      </div>
+    </SettingsSection>
+  );
+}
+
 function SearchModeSection() {
   return (
     <SettingsSection title="Search Mode" description="How you want to search for and download books.">
@@ -636,7 +798,7 @@ export default function SettingsPage() {
       case "security": return <ComingSoon section="Security" />;
       case "notifications": return <ComingSoon section="Notifications" />;
       case "audiobookbay": return <ComingSoon section="AudiobookBay" />;
-      case "download-clients": return <ComingSoon section="Download Clients" />;
+      case "download-clients": return <DownloadClientsSection />;
       default: return <ComingSoon section={activeSection} />;
     }
   };
