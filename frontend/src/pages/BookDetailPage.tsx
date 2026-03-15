@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getBook, updateBookStatus } from "@/api/client";
 import type { ReadingStatus } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
-import { ArrowLeft, BookOpen, Headphones, Clock, FileText } from "lucide-react";
+import { ArrowLeft, BookOpen, Headphones, Clock, FileText, Search } from "lucide-react";
+import FindReleasesModal from "@/components/FindReleasesModal";
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -21,6 +23,7 @@ export default function BookDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { addToast } = useToast();
+  const [releasesOpen, setReleasesOpen] = useState(false);
 
   const { data: book, isLoading, error } = useQuery({
     queryKey: ["book", id],
@@ -213,8 +216,26 @@ export default function BookDetailPage() {
               </Link>
             </div>
           )}
+
+          {/* Find Releases */}
+          <div className="mt-6">
+            <button
+              onClick={() => setReleasesOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+            >
+              <Search size={14} />
+              Find Releases
+            </button>
+          </div>
         </div>
       </div>
+
+      <FindReleasesModal
+        open={releasesOpen}
+        onClose={() => setReleasesOpen(false)}
+        bookTitle={book.title}
+        bookAuthor={book.authors[0]?.name}
+      />
     </div>
   );
 }

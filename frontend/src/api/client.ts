@@ -262,6 +262,11 @@ export interface SearchResult {
   source: string | null;
   owned: boolean;
   match_confidence: number;
+  download_url: string | null;
+  indexer: string | null;
+  size: number | null;
+  seeders: number | null;
+  format: string | null;
 }
 
 export interface DownloadResponse {
