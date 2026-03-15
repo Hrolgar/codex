@@ -71,6 +71,8 @@ export default function BookDetailPage() {
   }
 
   const isAudiobook = book.media_type === "audiobook";
+  const mediaLabel = book.media_type === 'audiobook' ? 'Audiobook' : book.media_type === 'comic' ? 'Comic' : 'eBook';
+  const mediaColor = book.media_type === 'audiobook' ? 'bg-orange-500/15 text-orange-400' : book.media_type === 'comic' ? 'bg-green-500/15 text-green-400' : 'bg-indigo-500/15 text-indigo-400';
   const currentStatus = (book.reading_status ?? "unread") as ReadingStatus;
 
   return (
@@ -104,13 +106,9 @@ export default function BookDetailPage() {
               )}
             </div>
             <span
-              className={`shrink-0 px-2.5 py-1 rounded text-xs font-medium ${
-                isAudiobook
-                  ? "bg-purple-500/20 text-purple-400"
-                  : "bg-indigo-500/20 text-indigo-400"
-              }`}
+              className={`shrink-0 px-2.5 py-1 rounded text-xs font-medium ${mediaColor}`}
             >
-              {isAudiobook ? "Audiobook" : "eBook"}
+              {mediaLabel}
             </span>
           </div>
 
@@ -235,6 +233,7 @@ export default function BookDetailPage() {
         onClose={() => setReleasesOpen(false)}
         bookTitle={book.title}
         bookAuthor={book.authors[0]?.name}
+        mediaType={book.media_type}
       />
     </div>
   );

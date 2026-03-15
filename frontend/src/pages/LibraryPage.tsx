@@ -106,7 +106,7 @@ export default function LibraryPage({ initialMediaType = "", title = "Library" }
           <h2 className="text-2xl font-bold text-gray-100">{title}</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             {data
-              ? `${data.total.toLocaleString()} book${data.total !== 1 ? "s" : ""}`
+              ? `${data.total.toLocaleString()} item${data.total !== 1 ? "s" : ""}`
               : "Loading..."}
           </p>
         </div>

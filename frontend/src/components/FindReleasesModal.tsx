@@ -49,6 +49,7 @@ export default function FindReleasesModal({
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("seeders");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [downloadingIdx, setDownloadingIdx] = useState<Set<number>>(new Set());
 
   const {
     data: results,
@@ -293,14 +294,25 @@ export default function FindReleasesModal({
                     </td>
                     <td className="py-2.5">
                       <button
-                        onClick={() => downloadMutation.mutate(result)}
+                        onClick={() => {
+                          setDownloadingIdx(prev => new Set([...prev, idx]));
+                          downloadMutation.mutate(result, {
+                            onSettled: () => {
+                              setDownloadingIdx(prev => {
+                                const next = new Set(prev);
+                                next.delete(idx);
+                                return next;
+                              });
+                            },
+                          });
+                        }}
                         disabled={
-                          !result.download_url || downloadMutation.isPending
+                          !result.download_url || downloadingIdx.has(idx)
                         }
                         title="Download"
                         className="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                       >
-                        {downloadMutation.isPending ? (
+                        {downloadingIdx.has(idx) ? (
                           <Loader2 size={14} className="animate-spin" />
                         ) : (
                           <Download size={14} />

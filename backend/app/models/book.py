@@ -18,7 +18,7 @@ class Book(Base):
     subtitle: Mapped[str | None] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text)
     cover_url: Mapped[str | None] = mapped_column(String(1000))
-    media_type: Mapped[str] = mapped_column(String(20), default="ebook")  # ebook | audiobook
+    media_type: Mapped[str] = mapped_column(String(20), default="ebook")  # ebook | audiobook | comic
     language: Mapped[str | None] = mapped_column(String(10))
     publish_year: Mapped[int | None]
     page_count: Mapped[int | None]

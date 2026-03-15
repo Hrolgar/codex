@@ -104,6 +104,7 @@ export default function SearchPage() {
     { value: "", label: "All" },
     { value: "ebook", label: "eBooks" },
     { value: "audiobook", label: "Audiobooks" },
+    { value: "comic", label: "Comics" },
   ];
 
   return (
@@ -124,7 +125,7 @@ export default function SearchPage() {
           />
           <input
             type="text"
-            placeholder="Search for books (min 3 characters)..."
+            placeholder="Search for books, audiobooks & comics (min 3 characters)..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             className="w-full pl-9 pr-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-colors"
