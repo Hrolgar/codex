@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getAuthors } from "@/api/client";
-import { Search, User, SearchX, AlertCircle, Plus } from "lucide-react";
+import { Search, User, SearchX, AlertCircle, Plus, Loader2 } from "lucide-react";
 import AddAuthorModal from "@/components/AddAuthorModal";
 
 export default function AuthorsPage() {
@@ -18,6 +18,11 @@ export default function AuthorsPage() {
   const { data: authors, isLoading, isError } = useQuery({
     queryKey: ["authors", debouncedSearch],
     queryFn: () => getAuthors(debouncedSearch || undefined),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.some((a) => a.catalog_status === "fetching")) return 3000;
+      return false;
+    },
   });
 
   return (
@@ -81,6 +86,8 @@ export default function AuthorsPage() {
       ) : authors && authors.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {authors.map((author) => {
+            const isFetching = author.catalog_status === "fetching";
+            const isErrorStatus = author.catalog_status === "error";
             const ownedCount = author.owned_count ?? 0;
             const totalCount = author.book_count;
             const pct = totalCount > 0 ? Math.round((ownedCount / totalCount) * 100) : 0;
@@ -89,10 +96,16 @@ export default function AuthorsPage() {
               <Link
                 key={author.id}
                 to={`/authors/${author.id}`}
-                className="group bg-gray-900 rounded-lg border border-gray-800 hover:border-indigo-500/50 transition-colors p-5 text-center"
+                className={`group bg-gray-900 rounded-lg border transition-colors p-5 text-center ${
+                  isFetching
+                    ? "border-indigo-500/30"
+                    : isErrorStatus
+                    ? "border-red-500/30"
+                    : "border-gray-800 hover:border-indigo-500/50"
+                }`}
               >
                 {/* Photo / Placeholder */}
-                <div className="w-16 h-16 rounded-lg mx-auto mb-3 overflow-hidden bg-gray-800 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-lg mx-auto mb-3 overflow-hidden bg-gray-800 flex items-center justify-center relative">
                   {author.photo_url ? (
                     <img
                       src={author.photo_url}
@@ -105,23 +118,43 @@ export default function AuthorsPage() {
                       className="text-gray-400 group-hover:text-indigo-400 transition-colors"
                     />
                   )}
+                  {isFetching && (
+                    <div className="absolute inset-0 bg-gray-900/50 flex items-center justify-center">
+                      <Loader2 size={20} className="text-indigo-400 animate-spin" />
+                    </div>
+                  )}
                 </div>
 
                 <h3 className="text-sm font-medium text-gray-100 truncate">
                   {author.name}
                 </h3>
 
-                <p className="text-xs text-gray-500 mt-1">
-                  {totalCount} book{totalCount !== 1 ? "s" : ""}
-                </p>
+                {isFetching ? (
+                  <p className="text-xs text-indigo-400 mt-1">Loading catalog...</p>
+                ) : isErrorStatus ? (
+                  <p className="text-xs text-red-400 mt-1 flex items-center justify-center gap-1">
+                    <AlertCircle size={10} />
+                    Catalog fetch failed
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {totalCount} book{totalCount !== 1 ? "s" : ""}
+                  </p>
+                )}
 
                 {/* Progress bar */}
-                <div className="mt-2 h-1.5 rounded-full bg-gray-800 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-green-500 transition-all"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
+                {isFetching ? (
+                  <div className="mt-2 h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                    <div className="h-full rounded-full bg-indigo-500/50 animate-pulse w-full" />
+                  </div>
+                ) : (
+                  <div className="mt-2 h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-green-500 transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
 
                 {/* Monitored badge */}
                 {author.monitored && (

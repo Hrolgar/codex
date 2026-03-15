@@ -23,6 +23,7 @@ export interface AuthorListItem {
   owned_count: number;
   monitored: boolean;
   photo_url: string | null;
+  catalog_status: string;
 }
 
 export interface AuthorDetail {
@@ -33,6 +34,7 @@ export interface AuthorDetail {
   openlibrary_key: string | null;
   bio: string | null;
   photo_url: string | null;
+  catalog_status: string;
   series: { id: string; name: string; book_count: number; owned_count: number }[];
   standalone_books: (BookListItem & { owned: boolean })[];
 }
@@ -156,7 +158,7 @@ export function getAuthor(id: string) {
 }
 
 export function addAuthor(name: string) {
-  return request<void>("/authors", {
+  return request<{ id: string }>("/authors", {
     method: "POST",
     body: JSON.stringify({ name }),
   });

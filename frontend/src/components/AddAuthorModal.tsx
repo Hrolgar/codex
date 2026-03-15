@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { addAuthor } from "@/api/client";
 import { X, Loader2 } from "lucide-react";
@@ -11,13 +12,17 @@ interface AddAuthorModalProps {
 export default function AddAuthorModal({ open, onClose }: AddAuthorModalProps) {
   const [name, setName] = useState("");
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const mutation = useMutation({
     mutationFn: (authorName: string) => addAuthor(authorName),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["authors"] });
       setName("");
       onClose();
+      if (data?.id) {
+        navigate(`/authors/${data.id}`);
+      }
     },
   });
 

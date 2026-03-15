@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 export default function AuthorDetailPage() {
@@ -30,6 +31,11 @@ export default function AuthorDetailPage() {
     queryKey: ["author", id],
     queryFn: () => getAuthor(id!),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.catalog_status === "fetching") return 3000;
+      return false;
+    },
   });
 
   const refreshMutation = useMutation({
@@ -89,6 +95,9 @@ export default function AuthorDetailPage() {
       </div>
     );
   }
+
+  const isFetching = author.catalog_status === "fetching";
+  const isCatalogError = author.catalog_status === "error";
 
   // Stats
   const totalSeriesBooks = author.series.reduce((sum, s) => sum + s.book_count, 0);
@@ -218,6 +227,43 @@ export default function AuthorDetailPage() {
         </div>
       </div>
 
+      {/* Catalog status banner */}
+      {isFetching && (
+        <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-4 py-3">
+          <Loader2 size={18} className="text-indigo-400 animate-spin shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-indigo-400">
+              Fetching bibliography from OpenLibrary...
+            </p>
+            <p className="text-xs text-indigo-400/70 mt-0.5">
+              This may take a minute for prolific authors. Books will appear as they are found.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isCatalogError && (
+        <div className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
+          <div className="flex items-center gap-3">
+            <AlertCircle size={18} className="text-red-400 shrink-0" />
+            <p className="text-sm text-red-400">
+              Failed to fetch catalog from OpenLibrary.
+            </p>
+          </div>
+          <button
+            onClick={() => refreshMutation.mutate()}
+            disabled={refreshMutation.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors"
+          >
+            <RefreshCw
+              size={14}
+              className={refreshMutation.isPending ? "animate-spin" : ""}
+            />
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Series sections */}
       {author.series.map((series) => {
         const isCollapsed = collapsedSeries.has(series.id);
@@ -269,13 +315,24 @@ export default function AuthorDetailPage() {
         </section>
       )}
 
-      {author.series.length === 0 && author.standalone_books.length === 0 && (
+      {!isFetching && author.series.length === 0 && author.standalone_books.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <BookOpen size={32} className="text-gray-700 mb-3" />
           <p className="text-gray-400">No books found for this author</p>
           <p className="text-sm text-gray-600 mt-1">
             Try refreshing the catalog
           </p>
+        </div>
+      )}
+
+      {isFetching && author.series.length === 0 && author.standalone_books.length === 0 && (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-14 bg-gray-900 border border-gray-800 rounded-lg animate-pulse"
+            />
+          ))}
         </div>
       )}
     </div>
