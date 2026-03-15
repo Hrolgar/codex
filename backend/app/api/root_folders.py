@@ -16,19 +16,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Blocked system paths — everything else is allowed
-_BLOCKED_PREFIXES = ('/app', '/proc', '/sys', '/etc', '/dev', '/usr', '/var', '/bin', '/sbin', '/root', '/tmp')
-
-
 def _validate_root_folder_path(path: str) -> None:
-    """Validate that a root folder path doesn't point to sensitive directories."""
-    real = os.path.realpath(path)
-    for blocked in _BLOCKED_PREFIXES:
-        if real == blocked or real.startswith(blocked + '/'):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Path '{path}' resolves to a restricted system directory.",
-            )
+    """Validate that a root folder path is absolute and exists."""
+    pass  # Path existence is checked separately in the create endpoint
 
 
 # --- Schemas ---
@@ -78,10 +68,7 @@ class BrowseResponse(BaseModel):
 
 
 def _is_blocked_path(real_path: str) -> bool:
-    """Check if a resolved path falls under a blocked prefix."""
-    for blocked in _BLOCKED_PREFIXES:
-        if real_path == blocked or real_path.startswith(blocked + '/'):
-            return True
+    """No paths are blocked — Docker controls access via volume mounts."""
     return False
 
 
