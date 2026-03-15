@@ -19,6 +19,23 @@ MEDIA_TYPE_CATEGORIES = {
 }
 
 
+def _clean_search_query(query: str) -> str:
+    """Remove trailing language codes that users might add to search queries."""
+    words = query.strip().split()
+    LANG_CODES = {
+        'en', 'eng', 'english',
+        'no', 'nor', 'norwegian',
+        'sv', 'swe', 'swedish',
+        'de', 'ger', 'german',
+        'fr', 'fre', 'french',
+        'es', 'spa', 'spanish',
+        'da', 'dan', 'danish',
+    }
+    while words and words[-1].lower() in LANG_CODES:
+        words.pop()
+    return ' '.join(words)
+
+
 def _parse_title_author(raw: str) -> tuple[str, str | None]:
     """Extract title and author from Prowlarr result title.
 
@@ -27,6 +44,10 @@ def _parse_title_author(raw: str) -> tuple[str, str | None]:
       'Title by Author'
       'Title'
     """
+    # Strip bracket content like [ENG / AZW3 EPUB MOBI] or (2015 Edition)
+    raw = re.sub(r'\[.*?\]', '', raw).strip()
+    raw = re.sub(r'\(.*?\)', '', raw).strip()
+
     # Try 'Author - Title'
     if " - " in raw:
         parts = raw.split(" - ", 1)
@@ -62,6 +83,8 @@ async def search_prowlarr(
     categories = MEDIA_TYPE_CATEGORIES.get(
         media_type, [CAT_EBOOKS, CAT_AUDIOBOOKS, CAT_COMICS]
     )
+
+    query = _clean_search_query(query)
 
     url = f"{base_url.rstrip('/')}/api/v1/search"
     params = {"query": query, "categories": categories}
