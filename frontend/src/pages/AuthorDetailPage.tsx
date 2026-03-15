@@ -112,8 +112,10 @@ export default function AuthorDetailPage() {
   const ownedSeriesBooks = author.series.reduce((sum, s) => sum + s.owned_count, 0);
   const totalStandalone = author.standalone_books.length;
   const ownedStandalone = author.standalone_books.filter((b) => b.owned).length;
+  const readStandalone = author.standalone_books.filter((b) => b.reading_status === "read").length;
   const totalBooks = totalSeriesBooks + totalStandalone;
   const ownedBooks = ownedSeriesBooks + ownedStandalone;
+  const readBooks = readStandalone;
   const missingBooks = totalBooks - ownedBooks;
 
   return (
@@ -148,7 +150,8 @@ export default function AuthorDetailPage() {
               <h1 className="text-2xl font-bold text-gray-100">{author.name}</h1>
               {/* Book count summary */}
               <p className="text-sm text-gray-400 mt-1">
-                {totalBooks} book{totalBooks !== 1 ? "s" : ""}, {ownedBooks} owned
+                {totalBooks} book{totalBooks !== 1 ? "s" : ""} total &middot; {ownedBooks} owned
+                {readBooks > 0 && <> &middot; {readBooks} read</>}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -234,7 +237,7 @@ export default function AuthorDetailPage() {
               >
                 {author.bio}
               </p>
-              {author.bio.length > 200 && (
+              {author.bio.length > 300 && (
                 <button
                   onClick={() => setBioExpanded(!bioExpanded)}
                   className="text-xs text-indigo-400 hover:text-indigo-300 mt-1.5 transition-colors"

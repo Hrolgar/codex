@@ -361,6 +361,23 @@ export function updateWishlistItem(id: string, data: Partial<WishlistCreate & { 
   });
 }
 
+// Notifications
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  read: boolean;
+  created_at: string;
+}
+
+export function getNotifications() {
+  return request<Notification[]>("/notifications");
+}
+
+export function markNotificationRead(id: string) {
+  return request<void>(`/notifications/${id}/read`, { method: "PUT" });
+}
+
 // Reading status
 export type ReadingStatus = "unread" | "reading" | "read";
 
