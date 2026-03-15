@@ -1,10 +1,13 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { getBooks, seedDemoData } from "@/api/client";
-import { BookOpen, ChevronLeft, ChevronRight, Settings as SettingsIcon } from "lucide-react";
+import type { BookListItem } from "@/api/client";
+import { BookOpen, ChevronLeft, ChevronRight, Settings as SettingsIcon, ArrowUpDown } from "lucide-react";
 import BookGrid from "@/components/library/BookGrid";
 import SearchBar from "@/components/library/SearchBar";
+
+type SortOption = "title" | "author" | "date" | "status";
 
 export default function LibraryPage() {
   const queryClient = useQueryClient();
@@ -15,6 +18,7 @@ export default function LibraryPage() {
   const [search, setSearch] = useState("");
   const [mediaType, setMediaType] = useState("");
   const [readFilter, setReadFilter] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("title");
   const [page, setPage] = useState(1);
   const perPage = 24;
 
@@ -40,11 +44,21 @@ export default function LibraryPage() {
 
   const totalPages = data ? Math.ceil(data.total / perPage) : 0;
 
-  const filteredBooks = (data?.items ?? []).filter((b) => {
-    if (!readFilter) return true;
-    const status = b.reading_status ?? "unread";
-    return status === readFilter;
-  });
+  const sortedBooks = useMemo(() => {
+    const statusOrder: Record<string, number> = { reading: 0, unread: 1, read: 2 };
+    let items: BookListItem[] = data?.items ?? [];
+    if (readFilter) {
+      items = items.filter((b) => (b.reading_status ?? "unread") === readFilter);
+    }
+    return [...items].sort((a, b) => {
+      switch (sortBy) {
+        case "author": return (a.author ?? "").localeCompare(b.author ?? "");
+        case "date": return (b.publish_year ?? 0) - (a.publish_year ?? 0);
+        case "status": return (statusOrder[a.reading_status ?? "unread"] ?? 1) - (statusOrder[b.reading_status ?? "unread"] ?? 1);
+        default: return (a.title ?? "").localeCompare(b.title ?? "");
+      }
+    });
+  }, [data?.items, readFilter, sortBy]);
 
   // Empty library state
   if (!isLoading && data?.total === 0 && !search && !mediaType) {
@@ -106,29 +120,47 @@ export default function LibraryPage() {
         mediaType={mediaType}
       />
 
-      {/* Read status filter */}
-      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1 w-fit">
-        {[
-          { value: "", label: "All" },
-          { value: "reading", label: "Reading" },
-          { value: "read", label: "Read" },
-          { value: "unread", label: "Unread" },
-        ].map((f) => (
-          <button
-            key={f.value}
-            onClick={() => { setReadFilter(f.value); setPage(1); }}
-            className={`px-3 py-1 rounded text-sm transition-colors ${
-              readFilter === f.value
-                ? "bg-indigo-500 text-white"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
+      {/* Read status filter + sort */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
+          {[
+            { value: "", label: "All" },
+            { value: "reading", label: "Reading" },
+            { value: "read", label: "Read" },
+            { value: "unread", label: "Unread" },
+          ].map((f) => (
+            <button
+              key={f.value}
+              onClick={() => { setReadFilter(f.value); setPage(1); }}
+              className={`px-3 py-1 rounded text-sm transition-colors ${
+                readFilter === f.value
+                  ? "bg-indigo-500 text-white"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <ArrowUpDown size={14} className="text-gray-500" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-indigo-500 transition-colors"
           >
-            {f.label}
-          </button>
-        ))}
+            <option value="title">Sort by Title</option>
+            <option value="author">Sort by Author</option>
+            <option value="date">Sort by Date Added</option>
+            <option value="status">Sort by Read Status</option>
+          </select>
+        </div>
       </div>
 
-      <BookGrid books={filteredBooks} isLoading={isLoading} />
+      <BookGrid
+        books={sortedBooks}
+        isLoading={isLoading}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (

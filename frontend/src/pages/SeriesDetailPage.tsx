@@ -13,14 +13,30 @@ export default function SeriesDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="h-4 w-24 skeleton rounded" />
-        <div className="h-8 w-48 skeleton rounded" />
-        <div className="h-4 w-32 skeleton rounded" />
-        <div className="h-6 w-full skeleton rounded-full" />
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 skeleton rounded-lg" />
+      <div className="space-y-6 animate-pulse">
+        <div>
+          <div className="h-4 w-24 bg-gray-800 rounded mb-3" />
+          <div className="h-8 w-64 bg-gray-800 rounded mb-2" />
+          <div className="h-4 w-32 bg-gray-800 rounded" />
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="h-4 w-32 bg-gray-800 rounded" />
+            <div className="h-4 w-12 bg-gray-800 rounded" />
+          </div>
+          <div className="h-2.5 bg-gray-800 rounded-full" />
+        </div>
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 bg-gray-900 rounded-lg border border-gray-800 p-3">
+              <div className="w-10 h-5 bg-gray-800 rounded" />
+              <div className="w-12 h-[4.5rem] bg-gray-800 rounded" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3.5 bg-gray-800 rounded w-2/5" />
+                <div className="h-3 bg-gray-800 rounded w-1/4" />
+              </div>
+              <div className="h-4 w-16 bg-gray-800 rounded" />
+            </div>
           ))}
         </div>
       </div>
