@@ -44,7 +44,7 @@ query BooksByIDs($ids: [Int!]!) {
     image { url }
     contributions { author { name } }
     editions {
-      format
+      edition_format
       language { language }
       isbn_13 isbn_10 asin
       audio_seconds
@@ -103,7 +103,7 @@ async def get_author_books(api_key: str, author_slug: str) -> list[dict]:
           contributions { author { name } }
           editions {
             id
-            format
+            edition_format
             language { language }
             isbn_13 isbn_10 asin
             audio_seconds
@@ -164,8 +164,8 @@ async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dic
 
 def classify_media_type(book: dict) -> str:
     editions = book.get('editions', [])
-    has_audio = any(e.get('audio_seconds') or e.get('format') == 'Audio' for e in editions)
-    has_ebook = any(e.get('format') in ('Paperback', 'Hardcover', 'ebook', 'Kindle') or e.get('pages') for e in editions)
+    has_audio = any(e.get('audio_seconds') or e.get('edition_format') == 'Audio' for e in editions)
+    has_ebook = any(e.get('edition_format') in ('Paperback', 'Hardcover', 'ebook', 'Kindle') or e.get('pages') for e in editions)
     if has_audio and not has_ebook:
         return 'audiobook'
     return 'ebook'
