@@ -243,16 +243,8 @@ async def _fetch_hardcover_author_photo(
     """Try to fetch a higher-quality author photo from Hardcover's GraphQL API."""
     query = """
     query AuthorSearch($query: String!) {
-      search(query: $query, query_type: "authors", per_page: 1) {
-        results {
-          ... on AuthorResult {
-            hits {
-              document {
-                image
-              }
-            }
-          }
-        }
+      search(query: $query, query_type: "Author", per_page: 1) {
+        results
       }
     }
     """
@@ -268,16 +260,19 @@ async def _fetch_hardcover_author_photo(
         if resp.status_code != 200:
             return None
         data = resp.json()
-        hits = (
-            data.get("data", {})
-            .get("search", {})
-            .get("results", [{}])[0]
-            .get("hits", [])
-        )
+        results = data.get("data", {}).get("search", {}).get("results", {})
+        hits = results.get("hits", []) if isinstance(results, dict) else []
         if hits:
-            image = hits[0].get("document", {}).get("image")
-            if image and isinstance(image, str) and image.startswith("http"):
-                return image
+            doc = hits[0].get("document", {})
+            image = doc.get("image")
+            if isinstance(image, dict):
+                url = image.get("url", "")
+            elif isinstance(image, str):
+                url = image
+            else:
+                url = ""
+            if url and url.startswith("http"):
+                return url
     except Exception:
         logger.debug("Hardcover GraphQL request failed for author %s", author_name)
     return None

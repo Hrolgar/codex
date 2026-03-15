@@ -73,14 +73,14 @@ query BooksByIDsFull($ids: [Int!]!) {
 async def search_author(api_key: str, name: str) -> dict | None:
     """Search for an author by name. Returns author data from jsonb results."""
     data = await _query(api_key, _SEARCH_IDS_QUERY, {
-        'q': name, 'queryType': 'authors', 'perPage': 1,
+        'q': name, 'queryType': 'Author', 'perPage': 1,
     })
     raw_results = data.get('data', {}).get('search', {}).get('results', [])
     results = _parse_results(raw_results)
     if not results:
         return None
     hit = results[0]
-    # jsonb results for authors contain: name, slug, image, etc.
+    # Author jsonb results have: name, slug, image, books, books_count, etc.
     # Normalize image to nested dict format callers expect (image.url)
     image_val = hit.get('image')
     if isinstance(image_val, str):
@@ -91,24 +91,25 @@ async def search_author(api_key: str, name: str) -> dict | None:
 
 
 async def get_author_books(api_key: str, author_slug: str) -> list[dict]:
+    """Fetch all books by an author via contributions (authors → contributions → book)."""
     query = '''
     query AuthorBooks($slug: String!) {
       authors(where: {slug: {_eq: $slug}}) {
         name
-        books_aggregate { aggregate { count } }
-        books(order_by: {users_read_count: desc}) {
-          id title slug
-          release_year
-          image { url }
-          contributions { author { name } }
-          editions {
-            id
-            edition_format
-            language { language }
-            isbn_13 isbn_10 asin
-            audio_seconds
-            pages
+        contributions {
+          book {
+            id title slug
             release_year
+            image { url }
+            contributions { author { name } }
+            editions {
+              id
+              edition_format
+              language { language }
+              isbn_13 isbn_10 asin
+              audio_seconds
+              pages
+            }
           }
         }
       }
@@ -117,7 +118,15 @@ async def get_author_books(api_key: str, author_slug: str) -> list[dict]:
     authors = data.get('data', {}).get('authors', [])
     if not authors:
         return []
-    return authors[0].get('books', [])
+    # Extract books from contributions, filter out nulls and deduplicate
+    seen_ids = set()
+    books = []
+    for contrib in authors[0].get('contributions', []):
+        book = contrib.get('book')
+        if book and book.get('id') not in seen_ids:
+            seen_ids.add(book['id'])
+            books.append(book)
+    return books
 
 
 def _parse_results(raw) -> list[dict]:
@@ -150,13 +159,10 @@ async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dic
     if not results:
         return []
     ids = [int(r['id']) for r in results if isinstance(r, dict) and r.get('id')]
-    logger.info("search_books: parsed %d results, ids=%s", len(results), ids[:5])
     if not ids:
         return []
     books_data = await _query(api_key, _BOOKS_BY_IDS_QUERY, {'ids': ids})
-    logger.info("search_books: books_data keys=%s, errors=%s", list(books_data.keys()), books_data.get('errors'))
     books = books_data.get('data', {}).get('books', [])
-    logger.info("search_books: got %d books back from ID lookup", len(books))
     # Preserve search result ordering
     book_map = {b['id']: b for b in books}
     return [book_map[i] for i in ids if i in book_map]
