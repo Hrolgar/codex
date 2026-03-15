@@ -76,7 +76,10 @@ async def search_author(api_key: str, name: str) -> dict | None:
         'q': name, 'queryType': 'authors', 'perPage': 1,
     })
     raw_results = data.get('data', {}).get('search', {}).get('results', [])
+    logger.info("Hardcover search_author raw response: %s", json.dumps(data.get('data', {}), default=str)[:2000])
+    logger.info("Hardcover search_author raw_results type=%s value=%s", type(raw_results).__name__, str(raw_results)[:1000])
     results = _parse_results(raw_results)
+    logger.info("Hardcover search_author parsed results: %s", str(results)[:1000])
     if not results:
         return None
     hit = results[0]
@@ -146,8 +149,11 @@ async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dic
     data = await _query(api_key, _SEARCH_IDS_QUERY, {
         'q': query, 'queryType': 'books', 'perPage': per_page,
     })
+    logger.info("Hardcover search_books raw response: %s", json.dumps(data, default=str)[:2000])
     raw_results = data.get('data', {}).get('search', {}).get('results', [])
+    logger.info("Hardcover search_books raw_results type=%s value=%s", type(raw_results).__name__, str(raw_results)[:1000])
     results = _parse_results(raw_results)
+    logger.info("Hardcover search_books parsed %d results", len(results))
     if not results:
         return []
     ids = [r['id'] for r in results if isinstance(r, dict) and r.get('id')]
