@@ -47,6 +47,38 @@ def _parse_language_codes(raw: str | None) -> set[str] | None:
     return codes if codes else None
 
 
+# Map title prefixes to their OL 3-letter language codes.
+# Used as a cheap heuristic to detect obvious foreign-language titles
+# before fetching edition data from the API.
+_TITLE_LANG_PATTERNS: list[tuple[str, str]] = [
+    # Spanish
+    ("El ", "spa"), ("La ", "spa"), ("Los ", "spa"), ("Las ", "spa"),
+    ("Del ", "spa"), ("De la ", "spa"),
+    # French
+    ("Le ", "fre"), ("Les ", "fre"), ("Du ", "fre"), ("De la ", "fre"),
+    ("L'", "fre"),
+    # German
+    ("Der ", "ger"), ("Die ", "ger"), ("Das ", "ger"), ("Ein ", "ger"),
+    # Portuguese
+    ("O ", "por"), ("Os ", "por"), ("Uma ", "por"),
+    # Italian
+    ("Il ", "ita"), ("Lo ", "ita"), ("Gli ", "ita"),
+]
+# NOTE: "La " matches both Spanish and French — we check all matches.
+
+
+def _title_suggests_blocked_language(title: str, allowed: set[str]) -> str | None:
+    """Return a detected language code if the title looks like a non-allowed language.
+
+    Returns the language code string if the title should be skipped, or None if OK.
+    """
+    for prefix, lang_code in _TITLE_LANG_PATTERNS:
+        if title.startswith(prefix):
+            if lang_code not in allowed:
+                return lang_code
+    return None
+
+
 def _work_matches_language(entry: dict, editions: list[dict], allowed: set[str]) -> bool:
     """Check if a work or any of its editions match the allowed languages."""
     # Check work-level language field
@@ -66,10 +98,9 @@ def _work_matches_language(entry: dict, editions: list[dict], allowed: set[str])
             if code in allowed:
                 return True
 
-    # If no language info at all, include the work (don't filter unknowns)
-    if not work_langs and not any(ed.get("languages") for ed in editions):
-        return True
-
+    # If no language info at all, EXCLUDE the work — users who set language
+    # preferences expect filtering.  Books in their language will almost always
+    # have at least one edition with language metadata on OpenLibrary.
     return False
 
 OL_BASE = "https://openlibrary.org"
@@ -214,6 +245,16 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                     continue
 
                 work_key_short = work_key.replace("/works/", "")
+
+                # Quick title-based language heuristic (before any API/DB calls)
+                if allowed_languages:
+                    detected = _title_suggests_blocked_language(work_title, allowed_languages)
+                    if detected:
+                        logger.debug(
+                            "Skipping work %r — title suggests language %r not in %s",
+                            work_title, detected, allowed_languages,
+                        )
+                        continue
 
                 # Check for existing book by OpenLibrary work key first (cheap DB lookup)
                 existing_by_key = await _find_by_openlibrary_key(db, work_key_short)
