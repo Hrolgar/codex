@@ -1,16 +1,40 @@
+import logging
+import os
 import shutil
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.root_folder import RootFolder
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+# Allowed path prefixes for root folders
+_ALLOWED_PREFIXES = ('/books', '/downloads', '/data', '/mnt', '/media', '/library', '/storage')
+_BLOCKED_PREFIXES = ('/app', '/proc', '/sys', '/etc', '/dev', '/usr', '/var', '/bin', '/sbin', '/root', '/tmp')
+
+
+def _validate_root_folder_path(path: str) -> None:
+    """Validate that a root folder path doesn't point to sensitive directories."""
+    real = os.path.realpath(path)
+    for blocked in _BLOCKED_PREFIXES:
+        if real == blocked or real.startswith(blocked + '/'):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Path '{path}' resolves to a restricted system directory.",
+            )
+    if not any(real == allowed or real.startswith(allowed + '/') for allowed in _ALLOWED_PREFIXES):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path must start with one of: {', '.join(_ALLOWED_PREFIXES)}",
+        )
 
 
 # --- Schemas ---
@@ -77,6 +101,7 @@ async def create_root_folder(data: RootFolderCreate, db: AsyncSession = Depends(
     p = Path(data.path)
     if not p.is_absolute():
         raise HTTPException(status_code=400, detail="Path must be absolute")
+    _validate_root_folder_path(data.path)
     if not p.is_dir():
         raise HTTPException(
             status_code=400,
@@ -159,5 +184,14 @@ async def delete_root_folder(folder_id: uuid.UUID, db: AsyncSession = Depends(ge
     folder = await db.get(RootFolder, folder_id)
     if not folder:
         raise HTTPException(status_code=404, detail="Root folder not found")
+    # Warn if this is the last root folder for its media type
+    count_result = await db.execute(
+        select(func.count()).select_from(RootFolder).where(RootFolder.media_type == folder.media_type)
+    )
+    if count_result.scalar() == 1:
+        logger.warning(
+            "Deleting the only root folder '%s' for media type '%s'",
+            folder.name, folder.media_type,
+        )
     await db.delete(folder)
     await db.commit()

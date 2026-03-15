@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,8 +20,18 @@ logger = logging.getLogger(__name__)
 STATIC_DIR = Path("/app/static")
 
 
+def _validate_identifier(name: str) -> str:
+    """Validate that a SQL identifier contains only safe characters."""
+    if not re.match(r'^[a-z_][a-z0-9_]*$', name):
+        raise ValueError(f"Invalid SQL identifier: {name!r}")
+    return name
+
+
 async def _add_column_if_missing(conn, table: str, column: str, col_type: str, default: str | None = None):
     """Add a column to an existing table if it doesn't already exist."""
+    _validate_identifier(table)
+    _validate_identifier(column)
+    _validate_identifier(col_type.split('(')[0].strip().lower())  # validate base type name
     from sqlalchemy import text
     result = await conn.execute(text(
         "SELECT column_name FROM information_schema.columns "

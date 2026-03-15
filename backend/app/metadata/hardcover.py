@@ -108,7 +108,7 @@ query BooksByIDsFull($ids: [Int!]!) {
 async def search_author(api_key: str, name: str) -> dict | None:
     """Search for an author by name. Returns author data from jsonb results."""
     data = await _query(api_key, _SEARCH_IDS_QUERY, {
-        'q': name, 'queryType': 'Author', 'perPage': 1,
+        'q': name, 'queryType': 'author', 'perPage': 1,
     })
     raw_results = data.get('data', {}).get('search', {}).get('results', [])
     results = _parse_results(raw_results)
