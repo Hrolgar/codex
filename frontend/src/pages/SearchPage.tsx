@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { searchExternal, createDownload, addToWishlist } from "@/api/client";
 import type { SearchResult } from "@/api/client";
@@ -14,14 +15,27 @@ import {
 } from "lucide-react";
 
 export default function SearchPage() {
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  const initialQuery = searchParams.get("q") ?? "";
+  const [search, setSearch] = useState(initialQuery);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialQuery);
   const [mediaType, setMediaType] = useState("");
   const [downloadingUrls, setDownloadingUrls] = useState<Set<string>>(
     new Set()
   );
   const queryClient = useQueryClient();
   const { addToast } = useToast();
+
+  // Sync from URL query param when it changes (e.g. navigating from author page)
+  const prevQRef = useRef(initialQuery);
+  useEffect(() => {
+    const q = searchParams.get("q") ?? "";
+    if (q !== prevQRef.current) {
+      prevQRef.current = q;
+      setSearch(q);
+      setDebouncedSearch(q);
+    }
+  }, [searchParams]);
 
   const wishlistMutation = useMutation({
     mutationFn: addToWishlist,
