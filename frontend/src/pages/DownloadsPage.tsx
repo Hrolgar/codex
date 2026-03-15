@@ -103,9 +103,20 @@ export default function DownloadsPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-16">
-          <Loader2 size={24} className="text-indigo-400 animate-spin mb-3" />
-          <p className="text-sm text-gray-500">Loading downloads...</p>
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="bg-gray-900 border border-gray-800 rounded-lg p-4 animate-pulse">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-gray-800 rounded-lg flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 bg-gray-800 rounded w-2/5" />
+                  <div className="h-3 bg-gray-800 rounded w-1/4" />
+                  <div className="h-1.5 bg-gray-800 rounded-full w-full mt-2" />
+                </div>
+                <div className="w-7 h-7 bg-gray-800 rounded-lg flex-shrink-0" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : isError ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">

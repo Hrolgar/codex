@@ -1,6 +1,8 @@
 import { ReactNode, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { User, BookOpen as BookIcon, Search, Download, Star, Settings, Menu, X, BookOpen } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { getNotifications } from "@/api/client";
+import { User, BookOpen as BookIcon, Search, Download, Star, Settings, Menu, X, BookOpen, Bell } from "lucide-react";
 
 const navItems = [
   { to: "/", icon: User, label: "Authors" },
@@ -8,11 +10,18 @@ const navItems = [
   { to: "/search", icon: Search, label: "Search" },
   { to: "/downloads", icon: Download, label: "Downloads" },
   { to: "/wishlist", icon: Star, label: "Wishlist" },
+  { to: "/notifications", icon: Bell, label: "Notifications" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: notifications } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: getNotifications,
+    refetchInterval: 30_000,
+  });
+  const unreadCount = notifications?.filter((n) => !n.read).length ?? 0;
 
   return (
     <div className="flex h-screen bg-gray-950">
@@ -59,6 +68,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             >
               <Icon size={18} />
               {label}
+              {label === "Notifications" && unreadCount > 0 && (
+                <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white min-w-[18px] text-center">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
