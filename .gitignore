@@ -30,3 +30,5 @@ data/
 covers/
 frontend/tsconfig.tsbuildinfo
 backend/venv/
+backend/venv/
+test.db
