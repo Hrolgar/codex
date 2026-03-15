@@ -85,6 +85,7 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
 
 # Default values for settings that should have non-empty defaults.
 SETTINGS_DEFAULTS: dict[str, str] = {
+    "general.languages": "en,no",
     "general.theme": "dark",
     "general.library_url": "",
     "general.audiobook_library_url": "",

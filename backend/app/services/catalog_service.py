@@ -263,6 +263,26 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                 # Check for existing book by OpenLibrary work key first (cheap DB lookup)
                 existing_by_key = await _find_by_openlibrary_key(db, work_key_short)
                 if existing_by_key:
+                    # Re-apply language filter to existing books on refresh
+                    if allowed_languages:
+                        book_lang = existing_by_key.language  # stored 3-letter code
+                        work_langs = entry.get("language", [])
+                        has_match = False
+                        # Check stored language on the book
+                        if book_lang and book_lang in allowed_languages:
+                            has_match = True
+                        # Check work-level language from OL entry
+                        if not has_match and isinstance(work_langs, list):
+                            for lang in work_langs:
+                                code = lang.split("/")[-1] if isinstance(lang, str) else ""
+                                if code in allowed_languages:
+                                    has_match = True
+                                    break
+                        # No language info at all — keep the book
+                        if not has_match and (book_lang or work_langs):
+                            existing_by_key.monitored = False
+                            excluded_languages += 1
+                            continue
                     existing_by_key.monitored = True
                     await link_book_author(db, existing_by_key.id, author.id)
                     continue
