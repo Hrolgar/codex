@@ -5,11 +5,12 @@ import type { SearchResult } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import { X, Download, Loader2, Search, ArrowDown, ArrowUp } from "lucide-react";
 
-interface FindReleasesModalProps {
+export interface FindReleasesModalProps {
   open: boolean;
   onClose: () => void;
   bookTitle: string;
   bookAuthor?: string;
+  mediaType?: string;
 }
 
 function formatSize(bytes: number | null): string {
@@ -39,6 +40,7 @@ export default function FindReleasesModal({
   onClose,
   bookTitle,
   bookAuthor,
+  mediaType,
 }: FindReleasesModalProps) {
   const { addToast } = useToast();
   const searchQuery = [bookTitle, bookAuthor].filter(Boolean).join(" ");
@@ -53,8 +55,8 @@ export default function FindReleasesModal({
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["search-releases", searchQuery],
-    queryFn: () => searchExternal(searchQuery),
+    queryKey: ["search-releases", searchQuery, mediaType],
+    queryFn: () => searchExternal(searchQuery, mediaType),
     enabled: open && !!searchQuery,
   });
 

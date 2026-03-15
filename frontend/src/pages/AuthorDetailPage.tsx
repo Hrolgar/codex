@@ -28,7 +28,7 @@ export default function AuthorDetailPage() {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [findReleasesBook, setFindReleasesBook] = useState<{title: string, author: string} | null>(null);
+  const [findReleasesBook, setFindReleasesBook] = useState<{title: string, author: string, mediaType?: string} | null>(null);
   const [collapsedSeries, setCollapsedSeries] = useState<Set<string>>(new Set());
   const [bioExpanded, setBioExpanded] = useState(false);
   const { data: author, isLoading, error } = useQuery({
@@ -350,7 +350,7 @@ export default function AuthorDetailPage() {
                 <SeriesBookPlaceholder
                   seriesId={series.id}
                   authorName={author.name}
-                  onSearch={(title, auth) => setFindReleasesBook({ title, author: auth })}
+                  onSearch={(title, auth, mt) => setFindReleasesBook({ title, author: auth, mediaType: mt })}
                 />
               </div>
             )}
@@ -358,19 +358,28 @@ export default function AuthorDetailPage() {
         );
       })}
 
-      {/* Standalone Books */}
-      {author.standalone_books.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold text-gray-200 mb-3">
-            Standalone Books
-          </h2>
-          <div className="space-y-1">
-            {author.standalone_books.map((book) => (
-              <BookRow key={book.id} book={book} authorName={author.name} onSearch={(title, auth) => setFindReleasesBook({ title, author: auth })} />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Standalone Books grouped by media type */}
+      {(() => {
+        const groups: { label: string; key: string; books: typeof author.standalone_books }[] = [
+          { label: "Books", key: "ebook", books: author.standalone_books.filter((b) => !b.media_type || b.media_type === "ebook") },
+          { label: "Audiobooks", key: "audiobook", books: author.standalone_books.filter((b) => b.media_type === "audiobook") },
+          { label: "Comics", key: "comic", books: author.standalone_books.filter((b) => b.media_type === "comic") },
+        ];
+        return groups
+          .filter((g) => g.books.length > 0)
+          .map((g) => (
+            <section key={g.key}>
+              <h2 className="text-lg font-semibold text-gray-200 mb-3">
+                {g.label}
+              </h2>
+              <div className="space-y-1">
+                {g.books.map((book) => (
+                  <BookRow key={book.id} book={book} authorName={author.name} onSearch={(title, auth, mt) => setFindReleasesBook({ title, author: auth, mediaType: mt })} />
+                ))}
+              </div>
+            </section>
+          ));
+      })()}
 
       {!isFetching && author.series.length === 0 && author.standalone_books.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -404,11 +413,18 @@ export default function AuthorDetailPage() {
           onClose={() => setFindReleasesBook(null)}
           bookTitle={findReleasesBook.title}
           bookAuthor={findReleasesBook.author}
+          mediaType={findReleasesBook.mediaType}
         />
       )}
     </div>
   );
 }
+
+const MEDIA_BADGE: Record<string, { label: string; color: string }> = {
+  ebook: { label: "EPUB", color: "bg-blue-500/20 text-blue-400" },
+  audiobook: { label: "AUDIO", color: "bg-orange-500/20 text-orange-400" },
+  comic: { label: "COMIC", color: "bg-green-500/20 text-green-400" },
+};
 
 function BookRow({
   book,
@@ -419,9 +435,10 @@ function BookRow({
   book: BookListItem & { owned: boolean };
   authorName: string;
   position?: number;
-  onSearch?: (title: string, author: string) => void;
+  onSearch?: (title: string, author: string, mediaType?: string) => void;
 }) {
   const owned = book.owned;
+  const badge = MEDIA_BADGE[book.media_type] ?? MEDIA_BADGE.ebook;
   return (
     <div
       className={`flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 hover:border-gray-700 transition-colors ${
@@ -447,13 +464,16 @@ function BookRow({
         )}
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex items-center gap-2">
         <Link
           to={`/books/${book.id}`}
           className="text-sm font-medium text-gray-100 truncate hover:text-indigo-400 transition-colors block"
         >
           {book.title}
         </Link>
+        <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded ${badge.color} shrink-0`}>
+          {badge.label}
+        </span>
       </div>
 
       {/* Owned status */}
@@ -471,7 +491,7 @@ function BookRow({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onSearch?.(book.title, authorName);
+              onSearch?.(book.title, authorName, book.media_type || undefined);
             }}
             className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
           >
@@ -491,7 +511,7 @@ function SeriesBookPlaceholder({
 }: {
   seriesId: string;
   authorName: string;
-  onSearch?: (title: string, author: string) => void;
+  onSearch?: (title: string, author: string, mediaType?: string) => void;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["series", seriesId],
