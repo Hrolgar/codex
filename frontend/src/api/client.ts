@@ -26,6 +26,20 @@ export interface AuthorListItem {
   catalog_status: string;
 }
 
+export interface AuthorBookListItem extends BookListItem {
+  owned: boolean;
+  monitored: boolean;
+}
+
+export interface AuthorMediaGroup {
+  media_type: string;
+  books: AuthorBookListItem[];
+  total: number;
+  owned: number;
+  missing: number;
+  not_monitored: number;
+}
+
 export interface AuthorDetail {
   id: string;
   name: string;
@@ -37,6 +51,7 @@ export interface AuthorDetail {
   catalog_status: string;
   series: { id: string; name: string; book_count: number; owned_count: number }[];
   standalone_books: (BookListItem & { owned: boolean })[];
+  media_groups: AuthorMediaGroup[];
 }
 
 export interface SeriesListItem {

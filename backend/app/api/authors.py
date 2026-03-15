@@ -319,6 +319,7 @@ async def create_monitored_author(
         catalog_status=author.catalog_status,
         series=[],
         standalone_books=[],
+        media_groups=[],
     )
 
 
