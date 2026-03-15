@@ -532,16 +532,21 @@ function BookRow({
             <X size={12} />
             Missing
           </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSearch?.(book.title, authorName, book.media_type || undefined);
-            }}
-            className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
-          >
-            <Search size={12} />
-            Search
-          </button>
+          <div className="relative group">
+            <button
+              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+              title="Find releases"
+            >
+              <Search size={12} />
+              Search
+              <ChevronDown size={10} />
+            </button>
+            <div className="hidden group-hover:block absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-10 py-1 min-w-[140px]">
+              <button onClick={(e) => { e.stopPropagation(); onSearch?.(book.title, authorName, 'ebook'); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">Search eBooks</button>
+              <button onClick={(e) => { e.stopPropagation(); onSearch?.(book.title, authorName, 'audiobook'); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">Search Audiobooks</button>
+              <button onClick={(e) => { e.stopPropagation(); onSearch?.(book.title, authorName, 'comic'); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">Search Comics</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
