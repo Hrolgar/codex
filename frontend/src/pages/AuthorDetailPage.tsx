@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAuthor, refreshAuthor, deleteAuthor, getSeriesDetail } from "@/api/client";
 import type { BookListItem } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
+import FindReleasesModal from "@/components/FindReleasesModal";
 import {
   ArrowLeft,
   BookOpen,
@@ -27,6 +28,7 @@ export default function AuthorDetailPage() {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [findReleasesBook, setFindReleasesBook] = useState<{title: string, author: string} | null>(null);
   const [collapsedSeries, setCollapsedSeries] = useState<Set<string>>(new Set());
   const [bioExpanded, setBioExpanded] = useState(false);
   const { data: author, isLoading, error } = useQuery({
@@ -348,6 +350,7 @@ export default function AuthorDetailPage() {
                 <SeriesBookPlaceholder
                   seriesId={series.id}
                   authorName={author.name}
+                  onSearch={(title, auth) => setFindReleasesBook({ title, author: auth })}
                 />
               </div>
             )}
@@ -363,7 +366,7 @@ export default function AuthorDetailPage() {
           </h2>
           <div className="space-y-1">
             {author.standalone_books.map((book) => (
-              <BookRow key={book.id} book={book} authorName={author.name} />
+              <BookRow key={book.id} book={book} authorName={author.name} onSearch={(title, auth) => setFindReleasesBook({ title, author: auth })} />
             ))}
           </div>
         </section>
@@ -394,6 +397,15 @@ export default function AuthorDetailPage() {
           ))}
         </div>
       )}
+
+      {findReleasesBook && (
+        <FindReleasesModal
+          open={!!findReleasesBook}
+          onClose={() => setFindReleasesBook(null)}
+          bookTitle={findReleasesBook.title}
+          bookAuthor={findReleasesBook.author}
+        />
+      )}
     </div>
   );
 }
@@ -402,10 +414,12 @@ function BookRow({
   book,
   authorName,
   position,
+  onSearch,
 }: {
   book: BookListItem & { owned: boolean };
   authorName: string;
   position?: number;
+  onSearch?: (title: string, author: string) => void;
 }) {
   const owned = book.owned;
   return (
@@ -454,14 +468,16 @@ function BookRow({
             <X size={12} />
             Missing
           </span>
-          <Link
-            to={`/search?q=${encodeURIComponent(book.title + " " + authorName)}`}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSearch?.(book.title, authorName);
+            }}
             className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
-            onClick={(e) => e.stopPropagation()}
           >
             <Search size={12} />
             Search
-          </Link>
+          </button>
         </div>
       )}
     </div>
@@ -471,9 +487,11 @@ function BookRow({
 function SeriesBookPlaceholder({
   seriesId,
   authorName,
+  onSearch,
 }: {
   seriesId: string;
   authorName: string;
+  onSearch?: (title: string, author: string) => void;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["series", seriesId],
@@ -506,6 +524,7 @@ function SeriesBookPlaceholder({
           book={{ ...book, owned: book.owned ?? false }}
           authorName={authorName}
           position={book.position}
+          onSearch={onSearch}
         />
       ))}
     </div>
