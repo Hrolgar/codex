@@ -11,6 +11,7 @@ class AuthorListItem(BaseModel):
     sort_name: str | None = None
     monitored: bool = False
     photo_url: str | None = None
+    catalog_status: str = "idle"
     book_count: int
     owned_count: int = 0
 
@@ -36,6 +37,7 @@ class AuthorDetail(BaseModel):
     openlibrary_key: str | None = None
     bio: str | None = None
     photo_url: str | None = None
+    catalog_status: str = "idle"
     series: list[AuthorSeriesBrief] = []
     standalone_books: list[AuthorBookListItem] = []
 

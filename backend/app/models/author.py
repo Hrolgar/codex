@@ -18,6 +18,7 @@ class Author(Base):
     openlibrary_key: Mapped[str | None] = mapped_column(String(50))
     bio: Mapped[str | None] = mapped_column(Text)
     photo_url: Mapped[str | None] = mapped_column(String(1000))
+    catalog_status: Mapped[str] = mapped_column(String(20), default="idle", server_default="idle")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

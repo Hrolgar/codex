@@ -185,6 +185,9 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
     if not author.openlibrary_key:
         return 0
 
+    author.catalog_status = "fetching"
+    await db.commit()
+
     # Read language filter setting
     lang_raw = await get_setting(db, "general.languages")
     allowed_languages = _parse_language_codes(lang_raw)
@@ -329,6 +332,7 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
                 logger.warning("Failed to process work: %s", entry.get("title", "unknown"), exc_info=True)
                 continue
 
+    author.catalog_status = "complete"
     await db.commit()
 
     # Try to enrich newly added books with full metadata

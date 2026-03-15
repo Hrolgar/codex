@@ -1,7 +1,8 @@
 import asyncio
+import logging
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,8 @@ from app.schemas.author import (
     AuthorListItem,
     AuthorSeriesBrief,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -45,6 +48,7 @@ async def list_authors(
             Author.sort_name,
             Author.monitored,
             Author.photo_url,
+            Author.catalog_status,
             func.count(BookAuthor.book_id).label("book_count"),
             owned_count_sub,
         )
@@ -65,6 +69,7 @@ async def list_authors(
             sort_name=row.sort_name,
             monitored=row.monitored,
             photo_url=row.photo_url,
+            catalog_status=row.catalog_status,
             book_count=row.book_count,
             owned_count=row.owned_count or 0,
         )
@@ -184,6 +189,7 @@ async def get_author(author_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         openlibrary_key=author.openlibrary_key,
         bio=author.bio,
         photo_url=author.photo_url,
+        catalog_status=author.catalog_status,
         series=series_list,
         standalone_books=standalone_books,
     )
@@ -192,7 +198,6 @@ async def get_author(author_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 @router.post("", response_model=AuthorDetail)
 async def create_monitored_author(
     body: AuthorCreate,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """Add a monitored author by name. Creates author synchronously, then
@@ -204,6 +209,9 @@ async def create_monitored_author(
 
     # Kick off catalog refresh in background (fetches all works — slow)
     if author.openlibrary_key:
+        author.catalog_status = "fetching"
+        await db.commit()
+
         async def _refresh_catalog(author_id: uuid.UUID):
             from app.services.catalog_service import refresh_author_catalog
 
@@ -214,12 +222,13 @@ async def create_monitored_author(
                 try:
                     await refresh_author_catalog(bg_db, a)
                 except Exception:
-                    import logging
-                    logging.getLogger(__name__).warning(
+                    logger.warning(
                         "Background catalog fetch failed for %s", a.name, exc_info=True
                     )
+                    a.catalog_status = "error"
+                    await bg_db.commit()
 
-        background_tasks.add_task(_refresh_catalog, author.id)
+        asyncio.create_task(_refresh_catalog(author.id))
 
     # Return full author detail (no books yet — they load in background)
     return AuthorDetail(
@@ -230,6 +239,7 @@ async def create_monitored_author(
         openlibrary_key=author.openlibrary_key,
         bio=author.bio,
         photo_url=author.photo_url,
+        catalog_status=author.catalog_status,
         series=[],
         standalone_books=[],
     )
@@ -238,13 +248,15 @@ async def create_monitored_author(
 @router.post("/{author_id}/refresh")
 async def refresh_author(
     author_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """Re-fetch catalog for an author (get new books). Runs as background task."""
     author = await db.get(Author, author_id)
     if not author:
         raise HTTPException(status_code=404, detail="Author not found")
+
+    author.catalog_status = "fetching"
+    await db.commit()
 
     async def _refresh(aid: uuid.UUID):
         from app.services.catalog_service import refresh_author_catalog
@@ -255,13 +267,13 @@ async def refresh_author(
                 return
             try:
                 count = await refresh_author_catalog(bg_db, a)
-                import logging
-                logging.getLogger(__name__).info("Refreshed author %s: %d new books", a.name, count)
+                logger.info("Refreshed author %s: %d new books", a.name, count)
             except Exception:
-                import logging
-                logging.getLogger(__name__).warning("Refresh failed for author %s", aid, exc_info=True)
+                logger.warning("Refresh failed for author %s", aid, exc_info=True)
+                a.catalog_status = "error"
+                await bg_db.commit()
 
-    background_tasks.add_task(_refresh, author_id)
+    asyncio.create_task(_refresh(author_id))
     return {"status": "refreshing", "author_id": str(author_id)}
 
 
