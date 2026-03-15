@@ -226,20 +226,12 @@ async def get_author(author_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         editions_stmt = select(Edition).where(Edition.book_id.in_(standalone_book_ids))
         editions_result = await db.execute(editions_stmt)
         for ed in editions_result.scalars():
-            # Check if this edition is owned (has a LibraryItem)
-            owned_check = await db.execute(
-                select(func.count(LibraryItem.id)).where(
-                    LibraryItem.book_id == ed.book_id,
-                    LibraryItem.edition_id == ed.id,
-                )
-            )
-            ed_owned = (owned_check.scalar() or 0) > 0
             editions_by_book.setdefault(ed.book_id, []).append({
                 "id": str(ed.id),
                 "language": ed.language,
                 "format": ed.format,
                 "media_type": ed.media_type,
-                "owned": ed_owned,
+                "owned": False,
             })
 
     standalone_books = [
