@@ -121,6 +121,15 @@ class LibraryService:
             .label("author")
         )
 
+        # Owned subquery: has any LibraryItem
+        owned_subquery = (
+            select(func.count(LibraryItem.id))
+            .where(LibraryItem.book_id == Book.id)
+            .correlate(Book)
+            .scalar_subquery()
+            .label("owned_count")
+        )
+
         stmt = select(
             Book.id,
             Book.title,
@@ -129,6 +138,8 @@ class LibraryService:
             Book.cover_url,
             Book.isbn_13,
             Book.publish_year,
+            Book.monitored,
+            owned_subquery,
         )
         for cond in conditions:
             stmt = stmt.where(cond)
@@ -147,6 +158,8 @@ class LibraryService:
                 cover_url=row.cover_url,
                 isbn_13=row.isbn_13,
                 publish_year=row.publish_year,
+                owned=(row.owned_count or 0) > 0,
+                monitored=row.monitored,
             )
             for row in rows
         ]

@@ -321,6 +321,20 @@ async def get_author(author_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.patch("/{author_id}/monitor")
+async def toggle_author_monitored(
+    author_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle an author's monitored status."""
+    author = await db.get(Author, author_id)
+    if not author:
+        raise HTTPException(status_code=404, detail="Author not found")
+    author.monitored = not author.monitored
+    await db.commit()
+    return {"id": str(author.id), "monitored": author.monitored}
+
+
 @router.post("", response_model=AuthorDetail)
 async def create_monitored_author(
     body: AuthorCreate,
