@@ -1,30 +1,40 @@
 """Test fixtures — async SQLite database + FastAPI test client."""
-import asyncio
 import os
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, TSVECTOR, JSONB
+
+# ---------------------------------------------------------------------------
+# SQLite compat: teach the SQLite compiler how to render PG-only column types.
+# ---------------------------------------------------------------------------
+
+@compiles(PG_UUID, "sqlite")
+def compile_uuid_sqlite(type_, compiler, **kw):
+    return "CHAR(32)"
+
+@compiles(TSVECTOR, "sqlite")
+def compile_tsvector_sqlite(type_, compiler, **kw):
+    return "TEXT"
+
+@compiles(JSONB, "sqlite")
+def compile_jsonb_sqlite(type_, compiler, **kw):
+    return "TEXT"
+
 
 # Override database URL BEFORE importing app modules
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///test.db"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite://"
 
 from app.models import Base  # noqa: E402
 from app.database import get_db  # noqa: E402
 from app.main import app  # noqa: E402
 
-TEST_DB_URL = "sqlite+aiosqlite:///test.db"
+TEST_DB_URL = "sqlite+aiosqlite://"
 
 test_engine = create_async_engine(TEST_DB_URL, echo=False)
 test_session = async_sessionmaker(test_engine, expire_on_commit=False)
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest_asyncio.fixture(autouse=True)
