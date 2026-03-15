@@ -5,6 +5,8 @@ from sqlalchemy import select
 
 from app.database import async_session
 from app.models import Book, Library, LibraryItem
+from app.models.author import Author, BookAuthor
+from app.models.series import Series, SeriesBook
 from app.scanners.audiobookshelf import AudiobookshelfScanner
 from app.scanners.base import ScannedItem
 from app.scanners.filesystem import FilesystemScanner
@@ -90,6 +92,43 @@ async def _process_item(db, library: Library, item: ScannedItem) -> None:
             await svc.enrich_book(book)
         except Exception:
             logger.warning("Metadata enrichment failed for %s", book.title)
+
+    # Link book to author (get-or-create)
+    if item.author:
+        author = (await db.execute(
+            select(Author).where(Author.name == item.author)
+        )).scalar_one_or_none()
+        if not author:
+            author = Author(name=item.author)
+            db.add(author)
+            await db.flush()
+        # Link if not already linked
+        existing_link = (await db.execute(
+            select(BookAuthor).where(
+                BookAuthor.book_id == book.id,
+                BookAuthor.author_id == author.id,
+            )
+        )).scalar_one_or_none()
+        if not existing_link:
+            db.add(BookAuthor(book_id=book.id, author_id=author.id))
+
+    # Link book to series (get-or-create)
+    if item.series:
+        series = (await db.execute(
+            select(Series).where(Series.name == item.series)
+        )).scalar_one_or_none()
+        if not series:
+            series = Series(name=item.series)
+            db.add(series)
+            await db.flush()
+        existing_link = (await db.execute(
+            select(SeriesBook).where(
+                SeriesBook.series_id == series.id,
+                SeriesBook.book_id == book.id,
+            )
+        )).scalar_one_or_none()
+        if not existing_link:
+            db.add(SeriesBook(series_id=series.id, book_id=book.id))
 
     lib_item = LibraryItem(
         library_id=library.id,

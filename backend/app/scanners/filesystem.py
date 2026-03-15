@@ -37,7 +37,26 @@ class FilesystemScanner:
                 elif ext in AUDIO_EXTENSIONS:
                     _extract_audio_metadata(full_path, item)
 
+                # Infer author/series from directory structure
+                _infer_from_directory(root, full_path, item)
+
                 yield item
+
+
+def _infer_from_directory(root: Path, full_path: Path, item: ScannedItem) -> None:
+    """Infer author and series from directory structure relative to library root."""
+    try:
+        relative = full_path.relative_to(root)
+    except ValueError:
+        return
+    parts = relative.parent.parts  # directory parts, excluding filename
+    if len(parts) >= 1 and not item.author:
+        item.author = parts[0]
+    if len(parts) >= 2 and not item.series:
+        item.series = parts[1]
+    # Use filename as title fallback if no embedded metadata
+    if not item.title:
+        item.title = full_path.stem
 
 
 def _extract_epub_metadata(path: Path, item: ScannedItem) -> None:

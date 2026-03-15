@@ -13,6 +13,7 @@ class ScannedItem:
     asin: str | None = None
     duration_seconds: int | None = None
     cover_url: str | None = None
+    series: str | None = None
     media_type: str = "ebook"
     extra: dict = field(default_factory=dict)
 
