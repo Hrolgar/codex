@@ -397,7 +397,7 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
             if is_dup:
                 continue
 
-            book = Book(title=title, media_type=media_type, cover_url=cover_url, publish_year=year, monitored=True)
+            book = Book(title=title, media_type=media_type, cover_url=cover_url, publish_year=year, monitored=True, hardcover_slug=hc_book.get('slug'))
             db.add(book)
             await db.flush()
 

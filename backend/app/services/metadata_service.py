@@ -76,6 +76,8 @@ class MetadataService:
             book.isbn_10 = meta.isbn_10
         if not book.isbn_13 and meta.isbn_13:
             book.isbn_13 = meta.isbn_13
+        if not book.hardcover_slug and meta.hardcover_slug:
+            book.hardcover_slug = meta.hardcover_slug
         if meta.source:
             book.metadata_source = meta.source
 

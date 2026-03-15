@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getBook } from "@/api/client";
-import { ArrowLeft, BookOpen, Headphones, Clock, FileText, Search } from "lucide-react";
+import { ArrowLeft, BookOpen, Headphones, Clock, FileText, Search, ExternalLink } from "lucide-react";
 import FindReleasesModal from "@/components/FindReleasesModal";
 
 function formatDuration(seconds: number): string {
@@ -141,6 +141,25 @@ export default function BookDetailPage() {
             {book.isbn_10 && <p>ISBN-10: {book.isbn_10}</p>}
             {book.asin && <p>ASIN: {book.asin}</p>}
           </div>
+
+          {/* Metadata provider link */}
+          {(book.hardcover_slug || book.openlibrary_key) && (
+            <div className="mt-4">
+              <a
+                href={
+                  book.hardcover_slug
+                    ? `https://hardcover.app/books/${book.hardcover_slug}`
+                    : `https://openlibrary.org/works/${book.openlibrary_key}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-indigo-400 transition-colors"
+              >
+                <ExternalLink size={14} />
+                View on {book.hardcover_slug ? "Hardcover" : "OpenLibrary"}
+              </a>
+            </div>
+          )}
 
           {/* Library items */}
           {book.library_items.length > 0 && (

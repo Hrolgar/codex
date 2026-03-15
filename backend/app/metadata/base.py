@@ -16,6 +16,7 @@ class MetadataResult:
     isbn_13: str | None = None
     series_name: str | None = None
     series_position: float | None = None
+    hardcover_slug: str | None = None
     source: str = ""
 
 

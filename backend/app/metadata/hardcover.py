@@ -295,6 +295,7 @@ def _parse_book(book: dict) -> MetadataResult:
         isbn_13=isbn_13,
         series_name=series_name,
         series_position=series_position,
+        hardcover_slug=book.get("slug"),
         source="hardcover",
     )
 

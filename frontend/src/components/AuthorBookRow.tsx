@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toggleBookMonitored } from '@/api/client';
 import { Eye, EyeOff, Search, ChevronDown, ChevronRight } from 'lucide-react';
@@ -59,17 +60,17 @@ export default function AuthorBookRow({ book, authorName, onSearch }: Props) {
         </button>
 
         {/* Cover */}
-        <div className='w-8 h-11 rounded bg-gray-800 overflow-hidden shrink-0'>
+        <Link to={`/books/${book.id}`} className='w-8 h-11 rounded bg-gray-800 overflow-hidden shrink-0'>
           {book.cover_url ? (
             <img src={book.cover_url} alt={book.title} className='w-full h-full object-cover' />
           ) : (
             <div className='w-full h-full flex items-center justify-center text-gray-600 text-[10px]'>?</div>
           )}
-        </div>
+        </Link>
 
         {/* Title + format */}
         <div className='flex-1 min-w-0'>
-          <span className='text-sm text-gray-100 truncate block'>{book.title}</span>
+          <Link to={`/books/${book.id}`} className='text-sm text-gray-100 truncate block hover:text-indigo-400 transition-colors'>{book.title}</Link>
           {book.publish_year && <span className='text-xs text-gray-600'>{book.publish_year}</span>}
         </div>
 

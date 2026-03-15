@@ -115,6 +115,7 @@ export interface BookDetail {
   isbn_13: string | null;
   asin: string | null;
   openlibrary_key: string | null;
+  hardcover_slug: string | null;
   metadata_source: string | null;
   authors: AuthorBrief[];
   series: SeriesBrief[];

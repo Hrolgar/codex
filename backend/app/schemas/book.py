@@ -56,6 +56,7 @@ class BookResponse(BaseModel):
     isbn_13: str | None = None
     asin: str | None = None
     openlibrary_key: str | None = None
+    hardcover_slug: str | None = None
     metadata_source: str | None = None
     authors: list[AuthorBrief] = []
     series: list[SeriesBrief] = []
