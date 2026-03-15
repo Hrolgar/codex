@@ -167,7 +167,7 @@ export default function RootFoldersSection() {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {folder.scan_status === "scanning" && (
-                      <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" title="Scanning" />
+                      <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
                     )}
                     {folder.scan_status === "error" && (
                       <span className="w-2 h-2 rounded-full bg-red-500 inline-block" title="Scan error" />
