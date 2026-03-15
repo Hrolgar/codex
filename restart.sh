@@ -7,7 +7,7 @@ else
 fi
 
 git pull
-docker builder prune -f
-docker compose build --no-cache
+docker builder prune -af
+docker compose build --no-cache --pull
 docker compose up -d
 docker compose logs -f codex
