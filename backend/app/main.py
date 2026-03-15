@@ -14,10 +14,25 @@ from app.models import Base
 STATIC_DIR = Path("/app/static")
 
 
+async def _add_column_if_missing(conn, table: str, column: str, col_type: str, default: str | None = None):
+    """Add a column to an existing table if it doesn't already exist."""
+    from sqlalchemy import text
+    result = await conn.execute(text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = :table AND column_name = :column"
+    ), {"table": table, "column": column})
+    if not result.first():
+        default_clause = f" DEFAULT {default}" if default else ""
+        await conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {col_type}{default_clause}'))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Migrate existing databases: add new columns
+        await _add_column_if_missing(conn, "books", "read_status", "VARCHAR(20)", "'unread'")
+        await _add_column_if_missing(conn, "books", "date_read", "TIMESTAMPTZ")
 
     # Store session factory on app state for WebSocket access
     app.state.db_session = async_session

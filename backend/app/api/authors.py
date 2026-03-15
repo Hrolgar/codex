@@ -22,9 +22,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("", response_model=list[AuthorListItem])
+@router.get("")
 async def list_authors(
     search: str | None = Query(None, description="Filter authors by name"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     # Subquery: count of monitored books that have at least one LibraryItem
@@ -61,8 +63,16 @@ async def list_authors(
 
     stmt = stmt.order_by(func.coalesce(Author.sort_name, Author.name))
 
+    # Get total count before pagination
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    # Apply pagination
+    offset = (page - 1) * per_page
+    stmt = stmt.offset(offset).limit(per_page)
+
     result = await db.execute(stmt)
-    return [
+    items = [
         AuthorListItem(
             id=row.id,
             name=row.name,
@@ -75,6 +85,8 @@ async def list_authors(
         )
         for row in result
     ]
+
+    return {"items": items, "total": total, "page": page, "per_page": per_page}
 
 
 @router.get("/{author_id}", response_model=AuthorDetail)
