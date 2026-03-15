@@ -1,6 +1,7 @@
 from app.models.author import Author, BookAuthor
 from app.models.book import Base, Book
 from app.models.download import Download
+from app.models.edition import Edition
 from app.models.library import Library, LibraryItem
 from app.models.notification import Notification
 from app.models.series import Series, SeriesBook
@@ -17,6 +18,7 @@ __all__ = [
     "Library",
     "LibraryItem",
     "Download",
+    "Edition",
     "Notification",
     "WishlistItem",
     "AppSetting",
