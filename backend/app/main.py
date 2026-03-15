@@ -33,9 +33,6 @@ async def _add_column_if_missing(conn, table: str, column: str, col_type: str, d
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Migrate existing databases: add new columns
-        await _add_column_if_missing(conn, "books", "read_status", "VARCHAR(20)", "'unread'")
-        await _add_column_if_missing(conn, "books", "date_read", "TIMESTAMPTZ")
 
     # Store session factory on app state for WebSocket access
     app.state.db_session = async_session

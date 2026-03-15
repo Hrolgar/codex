@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import Boolean, String, Text, func
 from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -29,8 +29,6 @@ class Book(Base):
     openlibrary_key: Mapped[str | None] = mapped_column(String(50))
     monitored: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     metadata_source: Mapped[str | None] = mapped_column(String(50))
-    read_status: Mapped[str] = mapped_column(String(20), default="unread", server_default="unread")  # unread | reading | read
-    date_read: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     search_vector: Mapped[str | None] = mapped_column(TSVECTOR)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
