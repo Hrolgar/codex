@@ -290,9 +290,16 @@ async def _find_by_openlibrary_key(db: AsyncSession, work_key: str) -> Book | No
 
 
 async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
-    """Fetch all works for a monitored author from OpenLibrary and create/update books."""
+    """Fetch all works for a monitored author using the configured provider."""
     if not author.openlibrary_key:
         return 0
+
+    provider = await get_setting(db, 'search.book_provider') or 'openlibrary'
+
+    if provider == 'hardcover':
+        logger.info("Hardcover catalog provider not yet implemented, falling back to OpenLibrary")
+    elif provider == 'google':
+        logger.info("Google Books catalog provider not yet implemented, falling back to OpenLibrary")
 
     author.catalog_status = "fetching"
     await db.commit()
