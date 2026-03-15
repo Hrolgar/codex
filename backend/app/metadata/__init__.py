@@ -1,12 +1,5 @@
+# Metadata providers — import from specific modules to avoid circular imports
+# e.g. from app.metadata.hardcover import HardcoverProvider
 from app.metadata.base import MetadataProvider, MetadataResult
-from app.metadata.google_books import GoogleBooksProvider
-from app.metadata.hardcover import HardcoverProvider
-from app.metadata.openlibrary import OpenLibraryProvider
 
-__all__ = [
-    "MetadataProvider",
-    "MetadataResult",
-    "GoogleBooksProvider",
-    "HardcoverProvider",
-    "OpenLibraryProvider",
-]
+__all__ = ["MetadataProvider", "MetadataResult"]
