@@ -104,10 +104,17 @@ export default function AuthorBookRow({ book, authorName, onSearch }: Props) {
               <span className='font-mono text-gray-400 uppercase w-6'>{ed.language}</span>
               <span className='text-gray-500'>{ed.format}</span>
               {ed.owned ? (
-                <span className='text-green-400 ml-auto'>Owned</span>
+                <span className='text-green-400'>Owned</span>
               ) : (
-                <span className='text-gray-600 ml-auto'>Missing</span>
+                <span className='text-gray-600'>Not Found</span>
               )}
+              <button
+                onClick={() => onSearch(book.title + ' ' + ed.language, authorName, book.media_type)}
+                className='p-1 text-gray-600 hover:text-indigo-400 transition-colors ml-auto'
+                title={'Search for ' + ed.language.toUpperCase() + ' edition'}
+              >
+                <Search size={12} />
+              </button>
             </div>
           ))}
         </div>

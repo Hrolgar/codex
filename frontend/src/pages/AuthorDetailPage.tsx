@@ -226,7 +226,7 @@ export default function AuthorDetailPage() {
       )}
 
       {/* Media type tabs */}
-      {groups.length > 1 && (
+      {groups.length > 0 && (
         <div className="flex gap-1">
           {groups.map((g) => (
             <button
