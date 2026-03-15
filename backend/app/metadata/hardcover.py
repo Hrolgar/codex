@@ -9,6 +9,41 @@ logger = logging.getLogger(__name__)
 
 HARDCOVER_URL = 'https://api.hardcover.app/v1/graphql'
 
+# Map Hardcover's full language names to 2-letter ISO codes
+_HC_LANG_TO_ISO: dict[str, str] = {
+    'English': 'en', 'Norwegian': 'no', 'German': 'de', 'French': 'fr',
+    'Spanish; Castilian': 'es', 'Italian': 'it', 'Portuguese': 'pt',
+    'Dutch': 'nl', 'Swedish': 'sv', 'Danish': 'da', 'Finnish': 'fi',
+    'Russian': 'ru', 'Polish': 'pl', 'Japanese': 'ja', 'Chinese': 'zh',
+    'Korean': 'ko', 'Arabic': 'ar', 'Hebrew': 'he', 'Hindi': 'hi',
+    'Czech': 'cs',
+}
+
+# Normalize Hardcover edition_format to common format names
+_HC_FORMAT_MAP: dict[str, str] = {
+    'Audio': 'audio', 'Paperback': 'paperback', 'Hardcover': 'hardcover',
+    'ebook': 'ebook', 'Kindle': 'ebook',
+}
+
+
+def _normalize_editions(editions: list[dict]) -> list[dict]:
+    """Normalize Hardcover edition data to provider-agnostic format."""
+    for ed in editions:
+        # Normalize language: {language: "English"} -> "en"
+        lang = ed.get('language')
+        if isinstance(lang, dict):
+            lang_name = lang.get('language', '')
+            ed['language'] = _HC_LANG_TO_ISO.get(lang_name, lang_name)
+        elif isinstance(lang, str):
+            ed['language'] = _HC_LANG_TO_ISO.get(lang, lang)
+        # Normalize edition_format to common format
+        fmt = ed.get('edition_format')
+        if fmt:
+            ed['format'] = _HC_FORMAT_MAP.get(fmt, fmt.lower() if fmt else '')
+        else:
+            ed['format'] = ''
+    return editions
+
 
 async def _query(api_key: str, query: str, variables: dict | None = None) -> dict:
     # Strip 'Bearer ' prefix if user pasted it with the token
@@ -125,6 +160,9 @@ async def get_author_books(api_key: str, author_slug: str) -> list[dict]:
         book = contrib.get('book')
         if book and book.get('id') not in seen_ids:
             seen_ids.add(book['id'])
+            # Normalize editions to provider-agnostic format
+            if 'editions' in book:
+                book['editions'] = _normalize_editions(book['editions'])
             books.append(book)
     return books
 
@@ -169,9 +207,16 @@ async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dic
 
 
 def classify_media_type(book: dict) -> str:
+    """Classify a book as 'ebook' or 'audiobook' using normalized edition data."""
     editions = book.get('editions', [])
-    has_audio = any(e.get('audio_seconds') or e.get('edition_format') == 'Audio' for e in editions)
-    has_ebook = any(e.get('edition_format') in ('Paperback', 'Hardcover', 'ebook', 'Kindle') or e.get('pages') for e in editions)
+    has_audio = any(
+        e.get('audio_seconds') or e.get('format') == 'audio'
+        for e in editions
+    )
+    has_ebook = any(
+        e.get('format') in ('paperback', 'hardcover', 'ebook') or e.get('pages')
+        for e in editions
+    )
     if has_audio and not has_ebook:
         return 'audiobook'
     return 'ebook'

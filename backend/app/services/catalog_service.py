@@ -51,47 +51,30 @@ def _parse_language_codes(raw: str | None) -> set[str] | None:
     return codes if codes else None
 
 
-# Map 2-letter language codes to Hardcover's full language names
-_HC_LANG_MAP: dict[str, str] = {
-    "en": "English", "no": "Norwegian", "sv": "Swedish", "da": "Danish",
-    "fi": "Finnish", "de": "German", "fr": "French", "es": "Spanish; Castilian",
-    "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "ru": "Russian",
-    "pl": "Polish", "ja": "Japanese", "zh": "Chinese", "ko": "Korean",
-    "ar": "Arabic", "he": "Hebrew", "hi": "Hindi", "cs": "Czech",
-}
-
-
-def _parse_hc_languages(raw: str | None) -> set[str] | None:
-    """Parse general.languages setting into Hardcover full language names.
+def _parse_allowed_codes(raw: str | None) -> set[str] | None:
+    """Parse general.languages setting into a set of 2-letter ISO codes.
 
     Returns None if no filtering should be applied.
     """
     if not raw or not raw.strip():
         return None
-    names: set[str] = set()
+    codes: set[str] = set()
     for part in raw.split(","):
         part = part.strip().lower()
-        if not part:
-            continue
-        mapped = _HC_LANG_MAP.get(part)
-        if mapped:
-            names.add(mapped)
-    return names if names else None
+        if part:
+            codes.add(part)
+    return codes if codes else None
 
 
-def _hc_book_matches_language(book: dict, allowed: set[str]) -> bool:
-    """Check if a Hardcover book has any edition in an allowed language."""
+def _book_matches_language(book: dict, allowed_codes: set[str]) -> bool:
+    """Check if a book has any edition whose language matches the allowed 2-letter codes.
+
+    Works with any provider that normalizes edition language to 2-letter ISO codes.
+    """
     for edition in book.get('editions', []):
-        lang = edition.get('language')
-        if isinstance(lang, dict):
-            lang_name = lang.get('language', '')
-        elif isinstance(lang, str):
-            lang_name = lang
-        else:
-            continue
-        if lang_name in allowed:
+        lang = edition.get('language', '')
+        if isinstance(lang, str) and lang.lower() in allowed_codes:
             return True
-    # No editions with language info — exclude when filtering is active
     return False
 
 
@@ -386,7 +369,7 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
 
     languages_raw = await get_setting(db, 'general.languages')
     languages = [l.strip() for l in (languages_raw or 'en').split(',') if l.strip()]
-    allowed_hc_langs = _parse_hc_languages(languages_raw)
+    allowed_codes = _parse_allowed_codes(languages_raw)
 
     added = 0
     excluded = 0
@@ -395,8 +378,8 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
         if not title:
             continue
 
-        # Filter by language if configured
-        if allowed_hc_langs and not _hc_book_matches_language(hc_book, allowed_hc_langs):
+        # Filter by language using normalized 2-letter codes
+        if allowed_codes and not _book_matches_language(hc_book, allowed_codes):
             excluded += 1
             continue
 

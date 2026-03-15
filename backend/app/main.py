@@ -1,9 +1,10 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=getattr(logging, os.environ.get('LOG_LEVEL', 'WARNING').upper(), logging.WARNING))
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
