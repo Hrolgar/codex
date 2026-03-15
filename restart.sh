@@ -8,4 +8,4 @@ fi
 
 git pull
 docker compose up -d --build --no-cache
-docker logs codex-codex-1 -f
+docker compose logs -f codex
