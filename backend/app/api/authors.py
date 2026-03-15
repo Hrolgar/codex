@@ -358,6 +358,7 @@ async def create_monitored_author(
 
         async def _refresh_catalog(author_id: uuid.UUID):
             from app.services.catalog_service import refresh_author_catalog
+            from app.services.library_match_service import match_author_to_library
 
             async with async_session() as bg_db:
                 a = await bg_db.get(Author, author_id)
@@ -365,6 +366,8 @@ async def create_monitored_author(
                     return
                 try:
                     await refresh_author_catalog(bg_db, a)
+                    # After catalog is populated, check root folders for existing files
+                    await match_author_to_library(bg_db, a)
                 except Exception:
                     logger.warning(
                         "Background catalog fetch failed for %s", a.name, exc_info=True
