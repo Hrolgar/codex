@@ -150,10 +150,13 @@ async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dic
     if not results:
         return []
     ids = [int(r['id']) for r in results if isinstance(r, dict) and r.get('id')]
+    logger.info("search_books: parsed %d results, ids=%s", len(results), ids[:5])
     if not ids:
         return []
     books_data = await _query(api_key, _BOOKS_BY_IDS_QUERY, {'ids': ids})
+    logger.info("search_books: books_data keys=%s, errors=%s", list(books_data.keys()), books_data.get('errors'))
     books = books_data.get('data', {}).get('books', [])
+    logger.info("search_books: got %d books back from ID lookup", len(books))
     # Preserve search result ordering
     book_map = {b['id']: b for b in books}
     return [book_map[i] for i in ids if i in book_map]
