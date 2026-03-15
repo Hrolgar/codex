@@ -14,14 +14,22 @@ async def check_duplicate(
     title: str,
     author: str | None = None,
     isbn: str | None = None,
+    media_type: str | None = None,
 ) -> tuple[bool, float, uuid.UUID | None]:
-    """Check if a book already exists. Returns (is_duplicate, confidence, matched_book_id)."""
+    """Check if a book already exists. Returns (is_duplicate, confidence, matched_book_id).
+
+    When media_type is provided, only matches against books with the same media_type.
+    This allows 'The Martian (ebook)' and 'The Martian (audiobook)' to coexist.
+    """
 
     # Tier 1: ISBN exact match
     if isbn:
         isbn = isbn.strip()
         for col in (Book.isbn_13, Book.isbn_10):
-            result = await db.execute(select(Book).where(col == isbn))
+            stmt = select(Book).where(col == isbn)
+            if media_type:
+                stmt = stmt.where(Book.media_type == media_type)
+            result = await db.execute(stmt)
             book = result.scalar_one_or_none()
             if book:
                 return True, 1.0, book.id
@@ -37,6 +45,8 @@ async def check_duplicate(
     first_word = norm_title.split()[0] if norm_title else ""
     if first_word:
         stmt = select(Book).where(Book.title.ilike(f"%{escape_like(first_word)}%"))
+        if media_type:
+            stmt = stmt.where(Book.media_type == media_type)
     else:
         return False, 0.0, None
 

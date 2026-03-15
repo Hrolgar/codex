@@ -206,8 +206,12 @@ async def search_books(api_key: str, query: str, per_page: int = 20) -> list[dic
     return [book_map[i] for i in ids if i in book_map]
 
 
-def classify_media_type(book: dict) -> str:
-    """Classify a book as 'ebook' or 'audiobook' using normalized edition data."""
+def classify_media_types(book: dict) -> list[str]:
+    """Classify a book's media types using normalized edition data.
+
+    Returns a list like ['ebook'], ['audiobook'], or ['ebook', 'audiobook']
+    when a book has editions of both types.
+    """
     editions = book.get('editions', [])
     has_audio = any(
         e.get('audio_seconds') or e.get('format') == 'audio'
@@ -217,9 +221,12 @@ def classify_media_type(book: dict) -> str:
         e.get('format') in ('paperback', 'hardcover', 'ebook') or e.get('pages')
         for e in editions
     )
-    if has_audio and not has_ebook:
-        return 'audiobook'
-    return 'ebook'
+    types: list[str] = []
+    if has_ebook or not has_audio:
+        types.append('ebook')
+    if has_audio:
+        types.append('audiobook')
+    return types
 
 
 # ---------------------------------------------------------------------------

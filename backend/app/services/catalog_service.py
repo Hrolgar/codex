@@ -354,7 +354,7 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
         await db.commit()
         return 0
 
-    from app.metadata.hardcover import get_author_books, classify_media_type
+    from app.metadata.hardcover import get_author_books, classify_media_types
 
     author.catalog_status = 'fetching'
     await db.commit()
@@ -383,7 +383,7 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
             excluded += 1
             continue
 
-        media_type = classify_media_type(hc_book)
+        media_types = classify_media_types(hc_book)
         cover_url = (hc_book.get('image') or {}).get('url', '')
         year = hc_book.get('release_year')
 
@@ -391,22 +391,24 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
         contribs = hc_book.get('contributions', [])
         book_author = contribs[0].get('author', {}).get('name', '') if contribs else author.name
 
-        is_dup, _, _ = await check_duplicate(db, title=title, author=book_author)
-        if is_dup:
-            continue
+        # Create one Book entry per media type (ebook and audiobook are separate products)
+        for media_type in media_types:
+            is_dup, _, _ = await check_duplicate(db, title=title, author=book_author, media_type=media_type)
+            if is_dup:
+                continue
 
-        book = Book(title=title, media_type=media_type, cover_url=cover_url, publish_year=year, monitored=True)
-        db.add(book)
-        await db.flush()
+            book = Book(title=title, media_type=media_type, cover_url=cover_url, publish_year=year, monitored=True)
+            db.add(book)
+            await db.flush()
 
-        # Create edition slots per language
-        fmt = 'epub' if media_type == 'ebook' else 'm4b' if media_type == 'audiobook' else 'cbz'
-        for lang in languages:
-            db.add(Edition(book_id=book.id, language=lang, format=fmt, media_type=media_type))
-        await db.flush()
+            # Create edition slots per language with matching format
+            fmt = 'epub' if media_type == 'ebook' else 'm4b' if media_type == 'audiobook' else 'cbz'
+            for lang in languages:
+                db.add(Edition(book_id=book.id, language=lang, format=fmt, media_type=media_type))
+            await db.flush()
 
-        await link_book_author(db, book.id, author.id)
-        added += 1
+            await link_book_author(db, book.id, author.id)
+            added += 1
 
     if excluded:
         logger.info('Hardcover catalog: excluded %d books for %s due to language filter', excluded, author.name)
