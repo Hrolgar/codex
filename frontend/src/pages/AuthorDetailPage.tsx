@@ -350,7 +350,7 @@ export default function AuthorDetailPage() {
                 <SeriesBookPlaceholder
                   seriesId={series.id}
                   authorName={author.name}
-                  onSearch={(title, auth, mt) => setFindReleasesBook({ title, author: auth, mediaType: mt })}
+                  onSearch={(title: string, auth: string, mt?: string) => setFindReleasesBook({ title, author: auth, mediaType: mt })}
                 />
               </div>
             )}
@@ -374,7 +374,7 @@ export default function AuthorDetailPage() {
               </h2>
               <div className="space-y-1">
                 {g.books.map((book) => (
-                  <BookRow key={book.id} book={book} authorName={author.name} onSearch={(title, auth, mt) => setFindReleasesBook({ title, author: auth, mediaType: mt })} />
+                  <BookRow key={book.id} book={book} authorName={author.name} onSearch={(title: string, auth: string, mt?: string) => setFindReleasesBook({ title, author: auth, mediaType: mt })} />
                 ))}
               </div>
             </section>
