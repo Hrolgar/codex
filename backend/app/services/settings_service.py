@@ -13,10 +13,28 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     "audiobookshelf.api_key": ("API Key", "Audiobookshelf API key", "audiobookshelf", True),
 
     # Prowlarr
+    "prowlarr.enabled": ("Prowlarr Enabled", "Enable Prowlarr as an indexer", "prowlarr", False),
     "prowlarr.url": ("Prowlarr URL", "Base URL of your Prowlarr instance", "prowlarr", False),
     "prowlarr.api_key": ("API Key", "Prowlarr API key", "prowlarr", True),
 
-    # Download clients
+    # Download clients – qBittorrent
+    "downloadclient.qbittorrent.enabled": ("qBittorrent Enabled", "Enable qBittorrent as a download client", "downloadclient", False),
+    "downloadclient.qbittorrent.url": ("qBittorrent URL", "Base URL of your qBittorrent instance", "downloadclient", False),
+    "downloadclient.qbittorrent.username": ("qBittorrent Username", "Username for qBittorrent", "downloadclient", False),
+    "downloadclient.qbittorrent.password": ("qBittorrent Password", "Password for qBittorrent", "downloadclient", True),
+    "downloadclient.qbittorrent.category.ebook": ("qBittorrent Ebook Category", "qBittorrent category for ebook downloads", "downloadclient", False),
+    "downloadclient.qbittorrent.category.audiobook": ("qBittorrent Audiobook Category", "qBittorrent category for audiobook downloads", "downloadclient", False),
+    "downloadclient.qbittorrent.category.comic": ("qBittorrent Comic Category", "qBittorrent category for comic downloads", "downloadclient", False),
+
+    # Download clients – SABnzbd
+    "downloadclient.sabnzbd.enabled": ("SABnzbd Enabled", "Enable SABnzbd as a download client", "downloadclient", False),
+    "downloadclient.sabnzbd.url": ("SABnzbd URL", "Base URL of your SABnzbd instance", "downloadclient", False),
+    "downloadclient.sabnzbd.api_key": ("SABnzbd API Key", "API key for SABnzbd", "downloadclient", True),
+    "downloadclient.sabnzbd.category.ebook": ("SABnzbd Ebook Category", "SABnzbd category for ebook downloads", "downloadclient", False),
+    "downloadclient.sabnzbd.category.audiobook": ("SABnzbd Audiobook Category", "SABnzbd category for audiobook downloads", "downloadclient", False),
+    "downloadclient.sabnzbd.category.comic": ("SABnzbd Comic Category", "SABnzbd category for comic downloads", "downloadclient", False),
+
+    # Legacy download dirs
     "download.dir": ("Download Directory", "Where to save downloaded files", "downloads", False),
     "download.temp_dir": ("Temp Directory", "Temporary directory for in-progress downloads", "downloads", False),
 
@@ -38,11 +56,20 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     "downloads.audiobooks.path_template": ("Audiobooks Path Template", "Path template for organizing audiobook files", "downloads", False),
     "downloads.audiobooks.hardlink": ("Audiobooks Hardlink", "Use hardlinks instead of copying audiobook files", "downloads", False),
 
+    # Downloads – Comics
+    "downloads.comics.destination": ("Comics Destination", "Directory where downloaded comics are saved", "downloads", False),
+    "downloads.comics.template": ("Comics Path Template", "Path template for organizing comic files", "downloads", False),
+    "downloads.comics.hardlink": ("Comics Hardlink", "Use hardlinks instead of copying comic files", "downloads", False),
+
     # Metadata Providers
     "metadata.hardcover.enabled": ("Hardcover Enabled", "Enable Hardcover as a metadata provider", "metadata", False),
     "metadata.hardcover.api_key": ("Hardcover API Key", "API key for Hardcover metadata provider", "metadata", True),
-    "metadata.google_books.enabled": ("Google Books Enabled", "Enable Google Books as a metadata provider", "metadata", False),
-    "metadata.google_books.api_key": ("Google Books API Key", "API key for Google Books metadata provider", "metadata", True),
+    "metadata.openlibrary.enabled": ("Open Library Enabled", "Enable Open Library as a metadata provider", "metadata", False),
+    "metadata.openlibrary.api_key": ("Open Library API Key", "API key for Open Library metadata provider", "metadata", True),
+    "metadata.google.enabled": ("Google Books Enabled", "Enable Google Books as a metadata provider", "metadata", False),
+    "metadata.google.api_key": ("Google Books API Key", "API key for Google Books metadata provider", "metadata", True),
+    "metadata.google_books.enabled": ("Google Books (Legacy) Enabled", "Enable Google Books as a metadata provider (legacy key)", "metadata", False),
+    "metadata.google_books.api_key": ("Google Books (Legacy) API Key", "API key for Google Books (legacy key)", "metadata", True),
 
     # Auto-download
     "auto_download.interval_hours": ("Check Interval (hours)", "How often to check wishlist for auto-downloads (default: 6)", "auto_download", False),
@@ -61,16 +88,46 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "general.audiobook_library_url": "",
     "general.supported_book_formats": "epub,mobi,azw3,pdf,cbz,cbr",
     "general.supported_audiobook_formats": "m4b,mp3,m4a",
+    # Prowlarr
+    "prowlarr.enabled": "false",
+    "prowlarr.url": "",
+    "prowlarr.api_key": "",
+    # Download clients – qBittorrent
+    "downloadclient.qbittorrent.enabled": "false",
+    "downloadclient.qbittorrent.url": "",
+    "downloadclient.qbittorrent.username": "",
+    "downloadclient.qbittorrent.password": "",
+    "downloadclient.qbittorrent.category.ebook": "codex-books",
+    "downloadclient.qbittorrent.category.audiobook": "codex-audiobooks",
+    "downloadclient.qbittorrent.category.comic": "codex-comics",
+    # Download clients – SABnzbd
+    "downloadclient.sabnzbd.enabled": "false",
+    "downloadclient.sabnzbd.url": "",
+    "downloadclient.sabnzbd.api_key": "",
+    "downloadclient.sabnzbd.category.ebook": "codex-books",
+    "downloadclient.sabnzbd.category.audiobook": "codex-audiobooks",
+    "downloadclient.sabnzbd.category.comic": "codex-comics",
+    # Downloads – Books
     "downloads.books.destination": "/downloads/books",
     "downloads.books.file_organization": "rename",
     "downloads.books.path_template": "{Author}/{Series}/{SeriesPosition} - {Title}",
-    "downloads.books.hardlink": "false",
+    "downloads.books.hardlink": "true",
+    # Downloads – Audiobooks
     "downloads.audiobooks.destination": "/downloads/audiobooks",
     "downloads.audiobooks.file_organization": "rename",
     "downloads.audiobooks.path_template": "{Author}/{Series}/{SeriesPosition} - {Title}",
-    "downloads.audiobooks.hardlink": "false",
+    "downloads.audiobooks.hardlink": "true",
+    # Downloads – Comics
+    "downloads.comics.destination": "/downloads/comics",
+    "downloads.comics.template": "{Author}/{Series}/{Title}",
+    "downloads.comics.hardlink": "true",
+    # Metadata providers
     "metadata.hardcover.enabled": "false",
     "metadata.hardcover.api_key": "",
+    "metadata.openlibrary.enabled": "true",
+    "metadata.openlibrary.api_key": "",
+    "metadata.google.enabled": "false",
+    "metadata.google.api_key": "",
     "metadata.google_books.enabled": "false",
     "metadata.google_books.api_key": "",
 }
