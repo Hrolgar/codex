@@ -77,7 +77,7 @@ export interface BookListItem {
   isbn_13: string | null;
   publish_year: number | null;
   owned?: boolean;
-  reading_status?: string | null;
+  monitored?: boolean;
 }
 
 export interface AuthorBrief {
@@ -119,7 +119,6 @@ export interface BookDetail {
   authors: AuthorBrief[];
   series: SeriesBrief[];
   library_items: LibraryItemBrief[];
-  reading_status: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -361,6 +360,7 @@ export function clearDemoData() {
 export interface WishlistItem {
   id: string;
   book_id: string | null;
+  book: BookListItem | null;
   search_title: string | null;
   search_author: string | null;
   status: "waiting" | "found" | "downloading" | "complete";
@@ -416,9 +416,6 @@ export function markNotificationRead(id: string) {
   return request<void>(`/notifications/${id}/read`, { method: "POST" });
 }
 
-// Reading status
-export type ReadingStatus = "unread" | "reading" | "read";
-
 export interface ProwlarrIndexer {
   id: number;
   name: string;
@@ -436,9 +433,3 @@ export function toggleBookMonitored(bookId: string, monitored: boolean) {
   });
 }
 
-export function updateBookStatus(id: string, status: ReadingStatus) {
-  return request<{ status: string }>(`/books/${id}/status`, {
-    method: "PUT",
-    body: JSON.stringify({ status }),
-  });
-}

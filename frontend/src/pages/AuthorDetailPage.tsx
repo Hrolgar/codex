@@ -207,7 +207,7 @@ export default function AuthorDetailPage() {
         <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-4 py-3">
           <Loader2 size={18} className="text-indigo-400 animate-spin shrink-0" />
           <div>
-            <p className="text-sm font-medium text-indigo-400">Fetching bibliography from OpenLibrary...</p>
+            <p className="text-sm font-medium text-indigo-400">Fetching bibliography...</p>
             <p className="text-xs text-indigo-400/70 mt-0.5">This may take a minute for prolific authors.</p>
           </div>
         </div>
@@ -217,7 +217,7 @@ export default function AuthorDetailPage() {
         <div className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
           <div className="flex items-center gap-3">
             <AlertCircle size={18} className="text-red-400 shrink-0" />
-            <p className="text-sm text-red-400">Failed to fetch catalog from OpenLibrary.</p>
+            <p className="text-sm text-red-400">Failed to fetch catalog.</p>
           </div>
           <button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">
             <RefreshCw size={14} className={refreshMutation.isPending ? "animate-spin" : ""} /> Retry

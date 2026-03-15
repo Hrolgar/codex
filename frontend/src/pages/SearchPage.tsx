@@ -77,14 +77,17 @@ export default function SearchPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["downloads"] });
     },
+    onError: () => {
+      addToast("Download failed. Please try again.", "error");
+    },
   });
 
   const handleDownload = (result: SearchResult) => {
-    if (!result.source) return;
-    setDownloadingUrls((prev) => new Set(prev).add(result.source!));
+    if (!result.download_url) return;
+    setDownloadingUrls((prev) => new Set(prev).add(result.download_url!));
     downloadMutation.mutate(
       {
-        source_url: result.source!,
+        source_url: result.download_url!,
         source_type: result.source!,
         book_id: result.book_id ?? undefined,
       },
@@ -92,7 +95,7 @@ export default function SearchPage() {
         onSettled: () => {
           setDownloadingUrls((prev) => {
             const next = new Set(prev);
-            next.delete(result.source!);
+            next.delete(result.download_url!);
             return next;
           });
         },
@@ -190,7 +193,7 @@ export default function SearchPage() {
                 result={result}
                 onDownload={handleDownload}
                 onWishlist={handleWishlist}
-                isDownloading={downloadingUrls.has(result.source ?? "")}
+                isDownloading={downloadingUrls.has(result.download_url ?? "")}
               />
             ))}
           </div>
@@ -259,7 +262,7 @@ function SearchResultCard({
         <div className="mt-auto pt-3 flex gap-2">
           <button
             onClick={() => onDownload(result)}
-            disabled={isDownloading || !result.source}
+            disabled={isDownloading || !result.download_url}
             className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isDownloading ? (

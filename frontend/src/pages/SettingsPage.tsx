@@ -257,9 +257,19 @@ function GeneralSection() {
   const [url, setUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [languages, setLanguages] = useState(ss.get("general.languages", "en,no"));
+  const [bookFormats, setBookFormats] = useState<string[]>(
+    ss.get("general.book_formats", "EPUB,MOBI,AZW3,CBZ,CBR,PDF").split(",").filter(Boolean)
+  );
+  const [audioFormats, setAudioFormats] = useState<string[]>(
+    ss.get("general.audio_formats", "M4B,MP3,M4A").split(",").filter(Boolean)
+  );
 
   useEffect(() => {
-    if (ss.loaded) setLanguages(ss.get("general.languages", "en,no"));
+    if (ss.loaded) {
+      setLanguages(ss.get("general.languages", "en,no"));
+      setBookFormats(ss.get("general.book_formats", "EPUB,MOBI,AZW3,CBZ,CBR,PDF").split(",").filter(Boolean));
+      setAudioFormats(ss.get("general.audio_formats", "M4B,MP3,M4A").split(",").filter(Boolean));
+    }
   }, [ss.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const LANG_CHIPS: { label: string; code: string }[] = [
@@ -423,8 +433,8 @@ function GeneralSection() {
         </button>
       </form>
 
-      <FormatTags available={BOOK_FORMATS} selected={["EPUB", "MOBI", "AZW3", "CBZ", "CBR", "PDF"]} onChange={() => {}} label="Supported Book Formats" description="Book formats to include in search results." />
-      <FormatTags available={AUDIO_FORMATS} selected={["M4B", "MP3", "M4A"]} onChange={() => {}} label="Supported Audiobook Formats" description="Audiobook formats to include in search results." />
+      <FormatTags available={BOOK_FORMATS} selected={bookFormats} onChange={(v) => { setBookFormats(v); ss.save({ "general.book_formats": v.join(",") }); addToast("Book formats saved"); }} label="Supported Book Formats" description="Book formats to include in search results." />
+      <FormatTags available={AUDIO_FORMATS} selected={audioFormats} onChange={(v) => { setAudioFormats(v); ss.save({ "general.audio_formats": v.join(",") }); addToast("Audiobook formats saved"); }} label="Supported Audiobook Formats" description="Audiobook formats to include in search results." />
 
       <div>
         <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-1">Default Book Languages</h3>

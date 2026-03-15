@@ -7,7 +7,7 @@ import { User, BookOpen as BookIcon, Search, Download, Star, Settings, Menu, X, 
 const navItems = [
   { to: "/", icon: User, label: "Authors" },
   { to: "/books", icon: BookIcon, label: "Library" },
-  { to: "/books?media_type=comic", icon: Layers, label: "Comics" },
+  { to: "/comics", icon: Layers, label: "Comics" },
   { to: "/search", icon: Search, label: "Search" },
   { to: "/downloads", icon: Download, label: "Downloads" },
   { to: "/wishlist", icon: Star, label: "Wishlist" },

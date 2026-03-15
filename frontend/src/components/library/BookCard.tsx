@@ -2,14 +2,9 @@ import { Link } from "react-router-dom";
 import { BookOpen, Headphones } from "lucide-react";
 import type { BookListItem } from "@/api/client";
 
-const STATUS_COLORS: Record<string, string> = {
-  reading: "bg-yellow-400",
-  read: "bg-green-400",
-};
-
 export default function BookCard({ book }: { book: BookListItem }) {
   const isAudiobook = book.media_type === "audiobook";
-  const statusColor = book.reading_status ? STATUS_COLORS[book.reading_status] : null;
+  const isComic = book.media_type === "comic";
 
   return (
     <Link
@@ -34,10 +29,12 @@ export default function BookCard({ book }: { book: BookListItem }) {
           className={`absolute top-2 right-2 px-2 py-0.5 rounded text-xs font-medium ${
             isAudiobook
               ? "bg-purple-500/20 text-purple-400"
-              : "bg-indigo-500/20 text-indigo-400"
+              : isComic
+                ? "bg-green-500/20 text-green-400"
+                : "bg-indigo-500/20 text-indigo-400"
           }`}
         >
-          {isAudiobook ? "Audio" : "eBook"}
+          {isAudiobook ? "Audio" : isComic ? "Comic" : "eBook"}
         </span>
         {/* Owned indicator */}
         {book.owned != null && (
@@ -46,13 +43,6 @@ export default function BookCard({ book }: { book: BookListItem }) {
               book.owned ? "bg-green-400" : "bg-gray-500"
             }`}
             title={book.owned ? "In Library" : "Missing"}
-          />
-        )}
-        {/* Reading status dot */}
-        {statusColor && (
-          <span
-            className={`absolute bottom-2 right-2 w-2.5 h-2.5 rounded-full ${statusColor} ring-2 ring-gray-800`}
-            title={book.reading_status === "reading" ? "Currently Reading" : "Read"}
           />
         )}
       </div>

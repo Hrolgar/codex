@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getBook, updateBookStatus } from "@/api/client";
-import type { ReadingStatus } from "@/api/client";
-import { useToast } from "@/contexts/ToastContext";
+import { useQuery } from "@tanstack/react-query";
+import { getBook } from "@/api/client";
 import { ArrowLeft, BookOpen, Headphones, Clock, FileText, Search } from "lucide-react";
 import FindReleasesModal from "@/components/FindReleasesModal";
 
@@ -13,33 +11,14 @@ function formatDuration(seconds: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-const STATUS_OPTIONS: { value: ReadingStatus; label: string; color: string }[] = [
-  { value: "unread", label: "Unread", color: "text-gray-400 bg-gray-700" },
-  { value: "reading", label: "Reading", color: "text-yellow-400 bg-yellow-500/15" },
-  { value: "read", label: "Read", color: "text-green-400 bg-green-500/15" },
-];
-
 export default function BookDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
-  const { addToast } = useToast();
   const [releasesOpen, setReleasesOpen] = useState(false);
 
   const { data: book, isLoading, error } = useQuery({
     queryKey: ["book", id],
     queryFn: () => getBook(id!),
     enabled: !!id,
-  });
-
-  const statusMutation = useMutation({
-    mutationFn: (status: ReadingStatus) => updateBookStatus(id!, status),
-    onSuccess: (_, status) => {
-      queryClient.invalidateQueries({ queryKey: ["book", id] });
-      queryClient.invalidateQueries({ queryKey: ["books"] });
-      const label = STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
-      addToast(`Marked as ${label}`);
-    },
-    onError: () => addToast("Failed to update status", "error"),
   });
 
   if (isLoading) {
@@ -73,7 +52,6 @@ export default function BookDetailPage() {
   const isAudiobook = book.media_type === "audiobook";
   const mediaLabel = book.media_type === 'audiobook' ? 'Audiobook' : book.media_type === 'comic' ? 'Comic' : 'eBook';
   const mediaColor = book.media_type === 'audiobook' ? 'bg-orange-500/15 text-orange-400' : book.media_type === 'comic' ? 'bg-green-500/15 text-green-400' : 'bg-indigo-500/15 text-indigo-400';
-  const currentStatus = (book.reading_status ?? "unread") as ReadingStatus;
 
   return (
     <div className="space-y-6">
@@ -133,27 +111,6 @@ export default function BookDetailPage() {
               ))}
             </p>
           )}
-
-          {/* Reading Status */}
-          <div className="mt-4">
-            <span className="text-xs text-gray-500 block mb-1.5">Reading Status</span>
-            <div className="inline-flex rounded-lg overflow-hidden border border-gray-700">
-              {STATUS_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => statusMutation.mutate(opt.value)}
-                  disabled={statusMutation.isPending}
-                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                    currentStatus === opt.value
-                      ? opt.color
-                      : "text-gray-500 bg-gray-800 hover:bg-gray-700 hover:text-gray-300"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Meta row */}
           <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-400">
