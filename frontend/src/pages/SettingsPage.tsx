@@ -8,7 +8,9 @@ import {
   getSystemStats,
   getSettings,
   updateSettings,
+  getProwlarrIndexers,
   type SettingsCategory,
+  type ProwlarrIndexer,
 } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -28,8 +30,6 @@ import {
   ChevronRight,
   Zap,
   Loader2,
-  CheckCircle2,
-  AlertCircle,
 } from "lucide-react";
 
 // --- Sidebar nav items ---
@@ -536,7 +536,9 @@ function DownloadClientsSection() {
   const [qbtUrl, setQbtUrl] = useState("");
   const [qbtUsername, setQbtUsername] = useState("");
   const [qbtPassword, setQbtPassword] = useState("");
-  const [qbtCategory, setQbtCategory] = useState("codex");
+  const [qbtCategoryEbook, setQbtCategoryEbook] = useState("codex-books");
+  const [qbtCategoryAudiobook, setQbtCategoryAudiobook] = useState("codex-audiobooks");
+  const [qbtCategoryComic, setQbtCategoryComic] = useState("codex-comics");
   const [qbtTesting, setQbtTesting] = useState(false);
   const [qbtTestResult, setQbtTestResult] = useState<string | null>(null);
 
@@ -544,7 +546,9 @@ function DownloadClientsSection() {
   const [sabEnabled, setSabEnabled] = useState(false);
   const [sabUrl, setSabUrl] = useState("");
   const [sabApiKey, setSabApiKey] = useState("");
-  const [sabCategory, setSabCategory] = useState("codex");
+  const [sabCategoryEbook, setSabCategoryEbook] = useState("codex-books");
+  const [sabCategoryAudiobook, setSabCategoryAudiobook] = useState("codex-audiobooks");
+  const [sabCategoryComic, setSabCategoryComic] = useState("codex-comics");
   const [sabTesting, setSabTesting] = useState(false);
   const [sabTestResult, setSabTestResult] = useState<string | null>(null);
 
@@ -566,11 +570,15 @@ function DownloadClientsSection() {
     if (allSettings["downloadclient.qbittorrent.url"]) setQbtUrl(allSettings["downloadclient.qbittorrent.url"]);
     if (allSettings["downloadclient.qbittorrent.username"]) setQbtUsername(allSettings["downloadclient.qbittorrent.username"]);
     if (allSettings["downloadclient.qbittorrent.password"]) setQbtPassword(allSettings["downloadclient.qbittorrent.password"]);
-    if (allSettings["downloadclient.qbittorrent.category"]) setQbtCategory(allSettings["downloadclient.qbittorrent.category"]);
+    if (allSettings["downloadclient.qbittorrent.category.ebook"]) setQbtCategoryEbook(allSettings["downloadclient.qbittorrent.category.ebook"]);
+    if (allSettings["downloadclient.qbittorrent.category.audiobook"]) setQbtCategoryAudiobook(allSettings["downloadclient.qbittorrent.category.audiobook"]);
+    if (allSettings["downloadclient.qbittorrent.category.comic"]) setQbtCategoryComic(allSettings["downloadclient.qbittorrent.category.comic"]);
     if (allSettings["downloadclient.sabnzbd.enabled"] === "true") setSabEnabled(true);
     if (allSettings["downloadclient.sabnzbd.url"]) setSabUrl(allSettings["downloadclient.sabnzbd.url"]);
     if (allSettings["downloadclient.sabnzbd.api_key"]) setSabApiKey(allSettings["downloadclient.sabnzbd.api_key"]);
-    if (allSettings["downloadclient.sabnzbd.category"]) setSabCategory(allSettings["downloadclient.sabnzbd.category"]);
+    if (allSettings["downloadclient.sabnzbd.category.ebook"]) setSabCategoryEbook(allSettings["downloadclient.sabnzbd.category.ebook"]);
+    if (allSettings["downloadclient.sabnzbd.category.audiobook"]) setSabCategoryAudiobook(allSettings["downloadclient.sabnzbd.category.audiobook"]);
+    if (allSettings["downloadclient.sabnzbd.category.comic"]) setSabCategoryComic(allSettings["downloadclient.sabnzbd.category.comic"]);
   });
 
   const saveMutation = useMutation({
@@ -588,7 +596,9 @@ function DownloadClientsSection() {
       "downloadclient.qbittorrent.url": qbtUrl,
       "downloadclient.qbittorrent.username": qbtUsername,
       "downloadclient.qbittorrent.password": qbtPassword,
-      "downloadclient.qbittorrent.category": qbtCategory,
+      "downloadclient.qbittorrent.category.ebook": qbtCategoryEbook,
+      "downloadclient.qbittorrent.category.audiobook": qbtCategoryAudiobook,
+      "downloadclient.qbittorrent.category.comic": qbtCategoryComic,
     });
   };
 
@@ -597,7 +607,9 @@ function DownloadClientsSection() {
       "downloadclient.sabnzbd.enabled": String(sabEnabled),
       "downloadclient.sabnzbd.url": sabUrl,
       "downloadclient.sabnzbd.api_key": sabApiKey,
-      "downloadclient.sabnzbd.category": sabCategory,
+      "downloadclient.sabnzbd.category.ebook": sabCategoryEbook,
+      "downloadclient.sabnzbd.category.audiobook": sabCategoryAudiobook,
+      "downloadclient.sabnzbd.category.comic": sabCategoryComic,
     });
   };
 
@@ -638,8 +650,14 @@ function DownloadClientsSection() {
             <Field label="Password">
               <SecretInput value={qbtPassword} onChange={setQbtPassword} />
             </Field>
-            <Field label="Category" description="Torrent category to assign in qBittorrent">
-              <input type="text" value={qbtCategory} onChange={(e) => setQbtCategory(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            <Field label="Books Category" description="Torrent category for ebooks in qBittorrent">
+              <input type="text" value={qbtCategoryEbook} onChange={(e) => setQbtCategoryEbook(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            </Field>
+            <Field label="Audiobooks Category" description="Torrent category for audiobooks in qBittorrent">
+              <input type="text" value={qbtCategoryAudiobook} onChange={(e) => setQbtCategoryAudiobook(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            </Field>
+            <Field label="Comics Category" description="Torrent category for comics in qBittorrent">
+              <input type="text" value={qbtCategoryComic} onChange={(e) => setQbtCategoryComic(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
             </Field>
             <div className="flex items-center gap-3">
               <button onClick={() => testConnection("qbittorrent")} disabled={qbtTesting} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2">
@@ -669,8 +687,14 @@ function DownloadClientsSection() {
             <Field label="API Key" required>
               <SecretInput value={sabApiKey} onChange={setSabApiKey} placeholder="Your SABnzbd API key" />
             </Field>
-            <Field label="Category" description="Category to assign in SABnzbd">
-              <input type="text" value={sabCategory} onChange={(e) => setSabCategory(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            <Field label="Books Category" description="Category for ebooks in SABnzbd">
+              <input type="text" value={sabCategoryEbook} onChange={(e) => setSabCategoryEbook(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            </Field>
+            <Field label="Audiobooks Category" description="Category for audiobooks in SABnzbd">
+              <input type="text" value={sabCategoryAudiobook} onChange={(e) => setSabCategoryAudiobook(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+            </Field>
+            <Field label="Comics Category" description="Category for comics in SABnzbd">
+              <input type="text" value={sabCategoryComic} onChange={(e) => setSabCategoryComic(e.target.value)} className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
             </Field>
             <div className="flex items-center gap-3">
               <button onClick={() => testConnection("sabnzbd")} disabled={sabTesting} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2">
@@ -758,9 +782,11 @@ function IntegrationCategory({ category, queryClient }: { category: SettingsCate
 
 function AdvancedSection({ categories }: { categories: SettingsCategory[] | undefined }) {
   const queryClient = useQueryClient();
+  const HANDLED_CATEGORIES = ['prowlarr', 'hardcover', 'openlibrary', 'google', 'general', 'downloads'];
+  const filtered = categories?.filter(cat => !HANDLED_CATEGORIES.includes(cat.category));
   return (
     <SettingsSection title="Advanced" description="Integration settings stored in the database.">
-      {categories?.length ? categories.map((cat) => <IntegrationCategory key={cat.category} category={cat} queryClient={queryClient} />) : <p className="text-sm text-gray-500">No integration settings configured.</p>}
+      {filtered?.length ? filtered.map((cat) => <IntegrationCategory key={cat.category} category={cat} queryClient={queryClient} />) : <p className="text-sm text-gray-500">No integration settings configured.</p>}
     </SettingsSection>
   );
 }
