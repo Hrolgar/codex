@@ -175,6 +175,15 @@ export default function AuthorsPage() {
               ? "Try adjusting your search"
               : "Add an author to start tracking their catalog"}
           </p>
+          {!search && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+            >
+              <Plus size={16} />
+              Add Author
+            </button>
+          )}
         </div>
       )}
 
