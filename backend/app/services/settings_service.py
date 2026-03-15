@@ -73,6 +73,12 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
     "metadata.google_books.enabled": ("Google Books (Legacy) Enabled", "Enable Google Books as a metadata provider (legacy key)", "metadata", False),
     "metadata.google_books.api_key": ("Google Books (Legacy) API Key", "API key for Google Books (legacy key)", "metadata", True),
 
+    # Search
+    "search.mode": ("Search Mode", "Universal or Direct search mode", "search", False),
+    "search.book_provider": ("Book Metadata Provider", "Primary metadata provider for books", "search", False),
+    "search.audiobook_provider": ("Audiobook Metadata Provider", "Metadata provider for audiobooks", "search", False),
+    "search.default_source": ("Default Release Source", "Default release source in search modal", "search", False),
+
     # Auto-download
     "auto_download.interval_hours": ("Check Interval (hours)", "How often to check wishlist for auto-downloads (default: 6)", "auto_download", False),
 
@@ -135,6 +141,11 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "metadata.google.api_key": "",
     "metadata.google_books.enabled": "false",
     "metadata.google_books.api_key": "",
+    # Search
+    "search.mode": "universal",
+    "search.book_provider": "openlibrary",
+    "search.audiobook_provider": "book",
+    "search.default_source": "prowlarr",
 }
 
 
