@@ -6,7 +6,8 @@ import {
   deleteRootFolder,
   type RootFolder,
 } from "@/api/client";
-import { Trash2, Plus, Loader2, FolderOpen, HardDrive } from "lucide-react";
+import { Trash2, Plus, Loader2, FolderOpen, HardDrive, Search } from "lucide-react";
+import FolderBrowserModal from "./FolderBrowserModal";
 
 function formatBytes(bytes: number) {
   if (bytes == null || isNaN(bytes)) return "Unknown";
@@ -24,6 +25,7 @@ export default function RootFoldersSection() {
   const [path, setPath] = useState("");
   const [mediaType, setMediaType] = useState("ebook");
   const [isDefault, setIsDefault] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
 
   const { data: folders = [], isLoading } = useQuery({
     queryKey: ["root-folders"],
@@ -161,13 +163,23 @@ export default function RootFoldersSection() {
       >
         <h3 className="text-sm font-medium text-gray-300">Add Root Folder</h3>
         <div className="flex flex-wrap gap-3">
-          <input
-            type="text"
-            placeholder="/path/to/media"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            className="flex-1 min-w-[200px] px-3 py-2 text-sm bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
-          />
+          <div className="flex-1 min-w-[200px] flex gap-1.5">
+            <input
+              type="text"
+              placeholder="/path/to/media"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              className="flex-1 px-3 py-2 text-sm bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+            />
+            <button
+              type="button"
+              onClick={() => setBrowseOpen(true)}
+              className="px-2.5 py-2 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-400 hover:text-gray-200 hover:bg-gray-700 transition-colors flex-shrink-0"
+              title="Browse folders"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          </div>
           <select
             value={mediaType}
             onChange={(e) => setMediaType(e.target.value)}
@@ -209,6 +221,13 @@ export default function RootFoldersSection() {
           </p>
         )}
       </form>
+
+      <FolderBrowserModal
+        open={browseOpen}
+        onClose={() => setBrowseOpen(false)}
+        onSelect={(selected) => setPath(selected)}
+        initialPath={path || undefined}
+      />
     </div>
   );
 }

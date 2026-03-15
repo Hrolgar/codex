@@ -465,3 +465,14 @@ export function deleteRootFolder(id: string) {
   return request<void>("/root-folders/" + id, { method: "DELETE" });
 }
 
+export interface BrowseResult {
+  current_path: string;
+  parent: string | null;
+  directories: { name: string; path: string }[];
+}
+
+export function browseFolders(path?: string) {
+  const params = path ? "?path=" + encodeURIComponent(path) : "";
+  return request<BrowseResult>("/root-folders/browse" + params);
+}
+
