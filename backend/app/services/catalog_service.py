@@ -174,7 +174,20 @@ async def create_monitored_author(db: AsyncSession, name: str) -> Author:
     provider = await get_setting(db, 'search.book_provider') or 'openlibrary'
 
     if provider == 'hardcover':
-        logger.info("Hardcover catalog provider not yet implemented, falling back to OpenLibrary")
+        api_key = await get_setting(db, 'metadata.hardcover.api_key')
+        if api_key:
+            from app.metadata.hardcover import search_author as hc_search_author
+            hc_author = await hc_search_author(api_key, name)
+            if hc_author:
+                author = await get_or_create_author(db, name)
+                author.monitored = True
+                author.bio = hc_author.get('bio', '')
+                author.photo_url = hc_author.get('image', {}).get('url', '')
+                author.openlibrary_key = hc_author.get('slug', '')  # reuse field for hardcover slug
+                await db.commit()
+                return author
+        # Fall through to OpenLibrary if no API key or no result
+        logger.info("Hardcover search failed or not configured for %s, falling back to OpenLibrary", name)
     elif provider == 'google':
         logger.info("Google Books catalog provider not yet implemented, falling back to OpenLibrary")
 
@@ -297,7 +310,44 @@ async def refresh_author_catalog(db: AsyncSession, author: Author) -> int:
     provider = await get_setting(db, 'search.book_provider') or 'openlibrary'
 
     if provider == 'hardcover':
-        logger.info("Hardcover catalog provider not yet implemented, falling back to OpenLibrary")
+        api_key = await get_setting(db, 'metadata.hardcover.api_key')
+        if api_key and author.openlibrary_key:  # slug stored here
+            from app.metadata.hardcover import get_author_books, classify_media_type
+            author.catalog_status = "fetching"
+            await db.commit()
+
+            hc_books = await get_author_books(api_key, author.openlibrary_key)
+            languages_raw = await get_setting(db, 'general.languages')
+            languages = [l.strip() for l in (languages_raw or 'en').split(',') if l.strip()]
+
+            for hc_book in hc_books:
+                title = hc_book.get('title', '')
+                if not title:
+                    continue
+                media_type = classify_media_type(hc_book)
+                cover_url = hc_book.get('image', {}).get('url', '')
+                year = hc_book.get('release_year')
+
+                # Check for duplicate
+                is_dup, _, _ = await check_duplicate(db, title=title, author=author.name)
+                if is_dup:
+                    continue
+
+                book = Book(title=title, media_type=media_type, cover_url=cover_url, publish_year=year, monitored=True)
+                db.add(book)
+                await db.flush()
+
+                # Create editions per enabled language
+                for lang in languages:
+                    db.add(Edition(book_id=book.id, language=lang, format='epub' if media_type == 'ebook' else 'm4b', media_type=media_type))
+                await db.flush()
+
+                await link_book_author(db, book.id, author.id)
+                added += 1
+
+            author.catalog_status = 'complete'
+            await db.commit()
+            return added
     elif provider == 'google':
         logger.info("Google Books catalog provider not yet implemented, falling back to OpenLibrary")
 

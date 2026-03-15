@@ -29,6 +29,40 @@ async def search_authors_external(
     q: str = Query(..., min_length=2),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.services.settings_service import get_setting
+
+    provider = await get_setting(db, "search.book_provider") or "openlibrary"
+
+    # Get existing author names to exclude
+    existing = await db.execute(select(Author.name))
+    existing_names = {r[0].lower() for r in existing}
+
+    if provider == "hardcover":
+        api_key = await get_setting(db, "metadata.hardcover.api_key")
+        if api_key:
+            from app.metadata.hardcover import search_books
+
+            hc_results = await search_books(api_key, q, per_page=8)
+            results = []
+            for r in hc_results:
+                name_parts = [
+                    c.get("author", {}).get("name", "")
+                    for c in r.get("contributions", [])
+                ]
+                name = ", ".join(n for n in name_parts if n) or r.get("title", "")
+                if name.lower() in existing_names:
+                    continue
+                results.append(
+                    {
+                        "name": name,
+                        "key": r.get("slug", ""),
+                        "work_count": 0,
+                        "top_work": r.get("title", ""),
+                    }
+                )
+            return results[:6]
+
+    # Default: OpenLibrary
     import httpx
 
     async with httpx.AsyncClient(timeout=10) as client:
@@ -38,10 +72,6 @@ async def search_authors_external(
         )
         resp.raise_for_status()
         data = resp.json()
-
-    # Get existing author names to exclude
-    existing = await db.execute(select(Author.name))
-    existing_names = {r[0].lower() for r in existing}
 
     results = []
     for doc in data.get("docs", []):

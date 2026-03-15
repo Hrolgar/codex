@@ -16,12 +16,17 @@ import {
   BookOpen,
   Plus,
 } from "lucide-react";
+import { useSettingsStore } from "@/hooks/useSettingsStore";
 
 export default function AuthorsPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [addingAuthor, setAddingAuthor] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const ss = useSettingsStore();
+  const provider = ss.get('search.book_provider', 'openlibrary');
+  const providerLabels: Record<string, string> = { openlibrary: 'OpenLibrary', hardcover: 'Hardcover', google: 'Google Books' };
+  const providerLabel = providerLabels[provider] || provider;
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 500);
@@ -225,7 +230,7 @@ export default function AuthorsPage() {
               <h3 className="text-sm font-medium text-gray-400">
                 Discover Authors
               </h3>
-              <span className="text-xs text-gray-600">From OpenLibrary</span>
+              <span className="text-xs text-gray-600">From {providerLabel}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {externalResults.map((ext) => (
