@@ -1,26 +1,35 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAuthor, refreshAuthor, deleteAuthor, getSeriesDetail } from "@/api/client";
-import type { BookListItem } from "@/api/client";
+import { getAuthor, refreshAuthor, deleteAuthor } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import FindReleasesModal from "@/components/FindReleasesModal";
+import AuthorBookRow from "@/components/AuthorBookRow";
 import {
   ArrowLeft,
-  BookOpen,
   RefreshCw,
   Trash2,
   User,
   Check,
   X,
-  Search,
-  ChevronDown,
-  ChevronRight,
   Loader2,
   AlertCircle,
-  Eye,
-  EyeOff,
 } from "lucide-react";
+
+interface MediaGroup {
+  media_type: string;
+  books: any[];
+  total: number;
+  owned: number;
+  missing: number;
+  not_monitored: number;
+}
+
+const TAB_LABELS: Record<string, string> = {
+  ebook: "eBooks",
+  audiobook: "Audiobooks",
+  comic: "Comics",
+};
 
 export default function AuthorDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -28,17 +37,16 @@ export default function AuthorDetailPage() {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [findReleasesBook, setFindReleasesBook] = useState<{title: string, author: string, mediaType?: string} | null>(null);
-  const [collapsedSeries, setCollapsedSeries] = useState<Set<string>>(new Set());
+  const [findRelease, setFindRelease] = useState<{ title: string; author: string; mediaType: string } | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
-  const [mediaFilter, setMediaFilter] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+
   const { data: author, isLoading, error } = useQuery({
     queryKey: ["author", id],
     queryFn: () => getAuthor(id!),
     enabled: !!id,
     refetchInterval: (query) => {
-      const data = query.state.data;
-      if (data?.catalog_status === "fetching") return 3000;
+      if (query.state.data?.catalog_status === "fetching") return 3000;
       return false;
     },
   });
@@ -48,9 +56,6 @@ export default function AuthorDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["author", id] });
       addToast("Refreshing catalog...", "info");
-    },
-    onError: () => {
-      addToast("Failed to refresh catalog", "error");
     },
   });
 
@@ -63,32 +68,56 @@ export default function AuthorDetailPage() {
     },
   });
 
-  const toggleSeries = (seriesId: string) => {
-    setCollapsedSeries((prev) => {
-      const next = new Set(prev);
-      if (next.has(seriesId)) next.delete(seriesId);
-      else next.add(seriesId);
-      return next;
-    });
-  };
+  // Build media groups from API response or client-side grouping
+  const groups: MediaGroup[] = useMemo(() => {
+    if (!author) return [];
+    if (author.media_groups?.length) return author.media_groups;
+
+    // Fallback: group all books (series + standalone) by media_type
+    const allBooks = [
+      ...(author.standalone_books || []),
+      ...(author.series?.flatMap((s: any) => s.books || []) || []),
+    ];
+    const map: Record<string, any[]> = {};
+    for (const b of allBooks) {
+      const mt = b.media_type || "ebook";
+      (map[mt] ??= []).push(b);
+    }
+    return Object.entries(map).map(([mt, books]) => ({
+      media_type: mt,
+      books,
+      total: books.length,
+      owned: books.filter((b: any) => b.owned).length,
+      missing: books.filter((b: any) => !b.owned && b.monitored !== false).length,
+      not_monitored: books.filter((b: any) => b.monitored === false).length,
+    }));
+  }, [author]);
+
+  // Set initial tab
+  const currentTab = activeTab || groups[0]?.media_type || "ebook";
+  const activeGroup = groups.find((g) => g.media_type === currentTab);
+
+  // Total stats across all groups
+  const totalBooks = groups.reduce((s, g) => s + g.total, 0);
+  const ownedBooks = groups.reduce((s, g) => s + g.owned, 0);
+  const missingBooks = groups.reduce((s, g) => s + g.missing, 0);
+  const notMonitored = groups.reduce((s, g) => s + g.not_monitored, 0);
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="h-4 w-24 skeleton rounded" />
         <div className="flex gap-6">
-          <div className="w-32 h-32 skeleton rounded-lg shrink-0" />
+          <div className="w-24 h-24 skeleton rounded-lg shrink-0" />
           <div className="space-y-3 flex-1">
             <div className="h-8 w-48 skeleton rounded" />
             <div className="h-4 w-full skeleton rounded" />
             <div className="h-4 w-3/4 skeleton rounded" />
           </div>
         </div>
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-16 skeleton rounded-lg" />
-          ))}
-        </div>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-14 skeleton rounded-lg" />
+        ))}
       </div>
     );
   }
@@ -98,10 +127,7 @@ export default function AuthorDetailPage() {
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <User size={32} className="text-gray-700 mb-3" />
         <p className="text-gray-400 text-lg">Author not found</p>
-        <Link
-          to="/"
-          className="text-indigo-400 hover:text-indigo-300 text-sm mt-2 inline-block"
-        >
+        <Link to="/" className="text-indigo-400 hover:text-indigo-300 text-sm mt-2">
           Back to authors
         </Link>
       </div>
@@ -109,493 +135,158 @@ export default function AuthorDetailPage() {
   }
 
   const isFetching = author.catalog_status === "fetching";
-  const isCatalogError = author.catalog_status === "error";
-
-  const totalSeriesBooks = author.series.reduce((sum, s) => sum + s.book_count, 0);
-  const ownedSeriesBooks = author.series.reduce((sum, s) => sum + s.owned_count, 0);
-  const totalStandalone = author.standalone_books.length;
-  const ownedStandalone = author.standalone_books.filter((b) => b.owned).length;
-  const readStandalone = author.standalone_books.filter((b) => b.reading_status === "read").length;
-  const totalBooks = totalSeriesBooks + totalStandalone;
-  const ownedBooks = ownedSeriesBooks + ownedStandalone;
-  const readBooks = readStandalone;
-  const missingBooks = totalBooks - ownedBooks;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Back link */}
-      <Link
-        to="/"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors"
-      >
-        <ArrowLeft size={16} />
-        Back to authors
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors">
+        <ArrowLeft size={14} /> Back to authors
       </Link>
 
       {/* Header */}
       <div className="flex gap-6">
         {/* Photo */}
-        <div className="w-32 h-32 rounded-lg bg-gray-800 overflow-hidden shrink-0 flex items-center justify-center">
+        <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-800 shrink-0 flex items-center justify-center">
           {author.photo_url ? (
-            <img
-              src={author.photo_url}
-              alt={author.name}
-              className="w-full h-full object-cover"
-            />
+            <img src={author.photo_url} alt={author.name} className="w-full h-full object-cover" />
           ) : (
-            <User size={48} className="text-gray-600" />
+            <User size={32} className="text-gray-600" />
           )}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
+            <div>
               <h1 className="text-2xl font-bold text-gray-100">{author.name}</h1>
-              {/* Book count summary */}
-              <p className="text-sm text-gray-400 mt-1">
-                {totalBooks} book{totalBooks !== 1 ? "s" : ""} total &middot; {ownedBooks} owned
-                {readBooks > 0 && <> &middot; {readBooks} read</>}
-              </p>
+              <p className="text-sm text-gray-500 mt-0.5">{totalBooks} books total · {ownedBooks} owned</p>
             </div>
+
+            {/* Actions */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* Monitor toggle */}
-              <button
-                onClick={() => {
-                  // Toggle monitored status via refresh (backend handles it)
-                  addToast(
-                    author.monitored
-                      ? "Monitoring paused"
-                      : "Monitoring all books",
-                    "info"
-                  );
-                }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                  author.monitored
-                    ? "text-green-400 bg-green-500/10 hover:bg-green-500/20"
-                    : "text-gray-400 bg-gray-800 hover:bg-gray-700"
-                }`}
-                title={author.monitored ? "Monitoring enabled" : "Monitoring disabled"}
-              >
-                {author.monitored ? <Eye size={14} /> : <EyeOff size={14} />}
-                {author.monitored ? "Monitored" : "Monitor"}
-              </button>
+              {author.monitored && (
+                <span className="px-2.5 py-1 rounded text-xs font-medium bg-green-500/15 text-green-400 flex items-center gap-1">
+                  <Check size={12} /> Monitored
+                </span>
+              )}
               <button
                 onClick={() => refreshMutation.mutate()}
-                disabled={refreshMutation.isPending}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                disabled={refreshMutation.isPending || isFetching}
+                className="p-2 text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50"
+                title="Refresh catalog"
               >
-                <RefreshCw
-                  size={14}
-                  className={refreshMutation.isPending ? "animate-spin" : ""}
-                />
-                Refresh
+                <RefreshCw size={16} className={isFetching ? "animate-spin" : ""} />
               </button>
-              {showDeleteConfirm ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-red-400">Remove books too?</span>
-                  <button
-                    onClick={() => deleteMutation.mutate(true)}
-                    disabled={deleteMutation.isPending}
-                    className="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors"
-                  >
-                    {deleteMutation.isPending ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      "Remove Books"
-                    )}
-                  </button>
-                  <button
-                    onClick={() => deleteMutation.mutate(false)}
-                    disabled={deleteMutation.isPending}
-                    className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                  >
-                    Keep Books
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
+              {!showDeleteConfirm ? (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                  className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                  title="Delete author"
                 >
-                  <Trash2 size={14} />
-                  Delete
+                  <Trash2 size={16} />
                 </button>
+              ) : (
+                <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1">
+                  <span className="text-xs text-red-400 mr-1">Delete?</span>
+                  <button onClick={() => deleteMutation.mutate(true)} className="p-1 text-red-400 hover:text-red-300" title="Delete with books">
+                    <Trash2 size={14} />
+                  </button>
+                  <button onClick={() => setShowDeleteConfirm(false)} className="p-1 text-gray-400 hover:text-gray-200">
+                    <X size={14} />
+                  </button>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Bio - expandable */}
+          {/* Bio */}
           {author.bio && (
-            <div className="mt-3 bg-gray-900/50 rounded-lg p-3">
-              <p
-                className={`text-sm text-gray-400 leading-relaxed ${
-                  !bioExpanded ? "line-clamp-3" : ""
-                }`}
-              >
+            <div className="mt-3">
+              <p className={`text-sm text-gray-400 leading-relaxed ${bioExpanded ? "" : "line-clamp-2"}`}>
                 {author.bio}
               </p>
-              {author.bio.length > 300 && (
-                <button
-                  onClick={() => setBioExpanded(!bioExpanded)}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 mt-1.5 transition-colors"
-                >
+              {author.bio.length > 200 && (
+                <button onClick={() => setBioExpanded(!bioExpanded)} className="text-xs text-indigo-400 hover:text-indigo-300 mt-1">
                   {bioExpanded ? "Show less" : "Show more"}
                 </button>
               )}
             </div>
           )}
-
-          {/* Stats bar */}
-          <div className="flex items-center gap-4 mt-3">
-            <span className="text-sm text-gray-300">
-              <span className="font-semibold text-gray-100">{totalBooks}</span>{" "}
-              total
-            </span>
-            <span className="text-sm text-green-400">
-              <span className="font-semibold">{ownedBooks}</span> owned
-            </span>
-            {missingBooks > 0 && (
-              <span className="text-sm text-gray-500">
-                <span className="font-semibold">{missingBooks}</span> missing
-              </span>
-            )}
-          </div>
         </div>
       </div>
 
-      {/* Catalog status banner */}
+      {/* Fetching banner */}
       {isFetching && (
-        <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-4 py-3">
-          <Loader2 size={18} className="text-indigo-400 animate-spin shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-indigo-400">
-              Fetching bibliography from OpenLibrary...
-            </p>
-            <p className="text-xs text-indigo-400/70 mt-0.5">
-              This may take a minute for prolific authors.
-            </p>
+        <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-4 py-2">
+          <Loader2 size={14} className="text-indigo-400 animate-spin" />
+          <span className="text-sm text-indigo-300">Loading catalog from OpenLibrary...</span>
+        </div>
+      )}
+
+      {author.catalog_status === "error" && (
+        <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
+          <AlertCircle size={14} className="text-red-400" />
+          <span className="text-sm text-red-300">Catalog fetch failed. Try refreshing.</span>
+        </div>
+      )}
+
+      {/* Stats bar */}
+      <div className="flex items-center gap-4 text-sm">
+        <span className="text-gray-300 font-medium">{totalBooks} total</span>
+        <span className="text-green-400">{ownedBooks} owned</span>
+        <span className="text-yellow-400">{missingBooks} missing</span>
+        {notMonitored > 0 && <span className="text-gray-500">{notMonitored} not monitored</span>}
+      </div>
+
+      {/* Tabs */}
+      {groups.length > 0 && (
+        <div className="border-b border-gray-800">
+          <div className="flex gap-0">
+            {groups.map((g) => (
+              <button
+                key={g.media_type}
+                onClick={() => setActiveTab(g.media_type)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  currentTab === g.media_type
+                    ? "border-indigo-500 text-gray-100"
+                    : "border-transparent text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                {TAB_LABELS[g.media_type] || g.media_type} ({g.total})
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      {isCatalogError && (
-        <div className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
-          <div className="flex items-center gap-3">
-            <AlertCircle size={18} className="text-red-400 shrink-0" />
-            <p className="text-sm text-red-400">
-              Failed to fetch catalog from OpenLibrary.
-            </p>
-          </div>
-          <button
-            onClick={() => refreshMutation.mutate()}
-            disabled={refreshMutation.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors"
-          >
-            <RefreshCw
-              size={14}
-              className={refreshMutation.isPending ? "animate-spin" : ""}
+      {/* Book list for active tab */}
+      {activeGroup && activeGroup.books.length > 0 ? (
+        <div className="border border-gray-800 rounded-lg overflow-hidden">
+          {activeGroup.books.map((book: any) => (
+            <AuthorBookRow
+              key={book.id}
+              book={book}
+              authorName={author.name}
+              onSearch={(title, auth, mediaType) => setFindRelease({ title, author: auth, mediaType })}
             />
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* Series sections with inline completion progress */}
-      {author.series.map((series) => {
-        const isCollapsed = collapsedSeries.has(series.id);
-        const seriesPct = series.book_count > 0
-          ? Math.round((series.owned_count / series.book_count) * 100)
-          : 0;
-        return (
-          <section key={series.id}>
-            <button
-              onClick={() => toggleSeries(series.id)}
-              className="w-full flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 hover:border-gray-700 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                {isCollapsed ? (
-                  <ChevronRight size={16} className="text-gray-500" />
-                ) : (
-                  <ChevronDown size={16} className="text-gray-500" />
-                )}
-                <h3 className="text-base font-semibold text-gray-100">
-                  {series.name}
-                </h3>
-              </div>
-              <div className="flex items-center gap-3">
-                {/* Inline progress bar */}
-                <div className="hidden sm:flex items-center gap-2">
-                  <div className="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${
-                        seriesPct === 100 ? "bg-green-500" : "bg-indigo-500"
-                      }`}
-                      style={{ width: `${seriesPct}%` }}
-                    />
-                  </div>
-                </div>
-                <span className="text-sm text-gray-400">
-                  {series.owned_count}/{series.book_count} owned
-                </span>
-              </div>
-            </button>
-
-            {!isCollapsed && (
-              <div className="mt-2 space-y-1">
-                <SeriesBookPlaceholder
-                  seriesId={series.id}
-                  authorName={author.name}
-                  onSearch={(title: string, auth: string, mt?: string) => setFindReleasesBook({ title, author: auth, mediaType: mt })}
-                />
-              </div>
-            )}
-          </section>
-        );
-      })}
-
-      {/* Standalone Books with media type filter */}
-      {author.standalone_books.length > 0 && (() => {
-        const ebookCount = author.standalone_books.filter((b) => !b.media_type || b.media_type === "ebook").length;
-        const audiobookCount = author.standalone_books.filter((b) => b.media_type === "audiobook").length;
-        const comicCount = author.standalone_books.filter((b) => b.media_type === "comic").length;
-        const presentTypes = [
-          ebookCount > 0 && "ebook",
-          audiobookCount > 0 && "audiobook",
-          comicCount > 0 && "comic",
-        ].filter(Boolean) as string[];
-        const hasMultipleTypes = presentTypes.length > 1;
-
-        const summaryParts: string[] = [];
-        if (ebookCount > 0) summaryParts.push(`${ebookCount} eBook${ebookCount !== 1 ? "s" : ""}`);
-        if (audiobookCount > 0) summaryParts.push(`${audiobookCount} Audiobook${audiobookCount !== 1 ? "s" : ""}`);
-        if (comicCount > 0) summaryParts.push(`${comicCount} Comic${comicCount !== 1 ? "s" : ""}`);
-
-        const activeFilter = mediaFilter === "all" || !hasMultipleTypes ? "all" : mediaFilter;
-        const filteredBooks = activeFilter === "all"
-          ? author.standalone_books
-          : author.standalone_books.filter((b) => (b.media_type || "ebook") === activeFilter);
-
-        const tabs = [
-          { key: "all", label: "All" },
-          { key: "ebook", label: "eBooks", count: ebookCount },
-          { key: "audiobook", label: "Audiobooks", count: audiobookCount },
-          { key: "comic", label: "Comics", count: comicCount },
-        ];
-
-        return (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-gray-200">
-                {hasMultipleTypes ? summaryParts.join(" · ") : summaryParts[0] || "Books"}
-              </h2>
-            </div>
-
-            {hasMultipleTypes && (
-              <div className="flex gap-1 mb-3">
-                {tabs
-                  .filter((t) => t.key === "all" || (t.count && t.count > 0))
-                  .map((t) => (
-                    <button
-                      key={t.key}
-                      onClick={() => setMediaFilter(t.key)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                        activeFilter === t.key
-                          ? "bg-indigo-500/20 text-indigo-400"
-                          : "text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700"
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-              </div>
-            )}
-
-            <div className="space-y-1">
-              {filteredBooks.map((book) => (
-                <BookRow key={book.id} book={book} authorName={author.name} onSearch={(title: string, auth: string, mt?: string) => setFindReleasesBook({ title, author: auth, mediaType: mt })} />
-              ))}
-            </div>
-          </section>
-        );
-      })()}
-
-      {!isFetching && author.series.length === 0 && author.standalone_books.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <BookOpen size={32} className="text-gray-700 mb-3" />
-          <p className="text-gray-400">No books found for this author</p>
-          <p className="text-sm text-gray-600 mt-1">
-            Try refreshing the catalog
-          </p>
-          <button
-            onClick={() => refreshMutation.mutate()}
-            disabled={refreshMutation.isPending}
-            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors"
-          >
-            <RefreshCw size={14} />
-            Refresh Catalog
-          </button>
-        </div>
-      )}
-
-      {isFetching && author.series.length === 0 && author.standalone_books.length === 0 && (
-        <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-14 skeleton rounded-lg" />
           ))}
         </div>
-      )}
-
-      {findReleasesBook && (
-        <FindReleasesModal
-          open={!!findReleasesBook}
-          onClose={() => setFindReleasesBook(null)}
-          bookTitle={findReleasesBook.title}
-          bookAuthor={findReleasesBook.author}
-          mediaType={findReleasesBook.mediaType}
-        />
-      )}
-    </div>
-  );
-}
-
-const MEDIA_BADGE: Record<string, { label: string; color: string }> = {
-  ebook: { label: "EPUB", color: "bg-blue-500/20 text-blue-400" },
-  audiobook: { label: "AUDIO", color: "bg-orange-500/20 text-orange-400" },
-  comic: { label: "COMIC", color: "bg-green-500/20 text-green-400" },
-};
-
-function BookRow({
-  book,
-  authorName,
-  position,
-  onSearch,
-}: {
-  book: BookListItem & { owned: boolean };
-  authorName: string;
-  position?: number;
-  onSearch?: (title: string, author: string, mediaType?: string) => void;
-}) {
-  const owned = book.owned;
-  const badge = MEDIA_BADGE[book.media_type] ?? MEDIA_BADGE.ebook;
-  return (
-    <div
-      className={`flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 hover:border-gray-700 transition-colors ${
-        !owned ? "opacity-60" : ""
-      }`}
-    >
-      {position != null && (
-        <span className="text-xs font-mono text-gray-500 w-6 text-right shrink-0">
-          #{position}
-        </span>
-      )}
-
-      {/* Cover thumbnail */}
-      <div className="w-8 h-12 rounded bg-gray-800 overflow-hidden shrink-0 flex items-center justify-center">
-        {book.cover_url ? (
-          <img
-            src={book.cover_url}
-            alt={book.title}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <BookOpen size={12} className="text-gray-600" />
-        )}
-      </div>
-
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <Link
-          to={`/books/${book.id}`}
-          className="text-sm font-medium text-gray-100 truncate hover:text-indigo-400 transition-colors block"
-        >
-          {book.title}
-        </Link>
-        <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded ${badge.color} shrink-0`}>
-          {badge.label}
-        </span>
-      </div>
-
-      {/* Owned status */}
-      {owned ? (
-        <span className="inline-flex items-center gap-1 text-xs text-green-400 shrink-0">
-          <Check size={12} />
-          In Library
-        </span>
-      ) : (
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-            <X size={12} />
-            Missing
-          </span>
-          <div className="relative group">
-            <button
-              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
-              title="Find releases"
-            >
-              <Search size={12} />
-              Search
-              <ChevronDown size={10} />
-            </button>
-            <div className="hidden group-hover:block absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-10 py-1 min-w-[140px]">
-              <button onClick={(e) => { e.stopPropagation(); onSearch?.(book.title, authorName, 'ebook'); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">Search eBooks</button>
-              <button onClick={(e) => { e.stopPropagation(); onSearch?.(book.title, authorName, 'audiobook'); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">Search Audiobooks</button>
-              <button onClick={(e) => { e.stopPropagation(); onSearch?.(book.title, authorName, 'comic'); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">Search Comics</button>
-            </div>
-          </div>
+      ) : groups.length === 0 && !isFetching ? (
+        <div className="text-center py-12 text-gray-500">
+          <p>No books found for this author.</p>
+          <p className="text-sm mt-1">Try refreshing the catalog.</p>
         </div>
-      )}
-    </div>
-  );
-}
+      ) : null}
 
-function SeriesBookPlaceholder({
-  seriesId,
-  authorName,
-  onSearch,
-}: {
-  seriesId: string;
-  authorName: string;
-  onSearch?: (title: string, author: string, mediaType?: string) => void;
-}) {
-  const { data, isLoading } = useQuery({
-    queryKey: ["series", seriesId],
-    queryFn: () => getSeriesDetail(seriesId),
-  });
-
-  if (isLoading) {
-    return (
-      <div className="space-y-1">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-14 skeleton rounded-lg" />
-        ))}
-      </div>
-    );
-  }
-
-  if (!data?.books?.length) {
-    return (
-      <p className="text-sm text-gray-500 px-4 py-2">No books in series</p>
-    );
-  }
-
-  const sorted = [...data.books].sort((a, b) => a.position - b.position);
-
-  return (
-    <div className="space-y-1">
-      {sorted.map((book) => (
-        <BookRow
-          key={book.id}
-          book={{ ...book, owned: book.owned ?? false }}
-          authorName={authorName}
-          position={book.position}
-          onSearch={onSearch}
+      {/* Find Releases Modal */}
+      {findRelease && (
+        <FindReleasesModal
+          open={true}
+          onClose={() => setFindRelease(null)}
+          bookTitle={findRelease.title}
+          bookAuthor={findRelease.author}
+          mediaType={findRelease.mediaType}
         />
-      ))}
+      )}
     </div>
   );
 }
