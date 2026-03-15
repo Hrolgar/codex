@@ -1,11 +1,14 @@
 import os
+import zipfile
+import xml.etree.ElementTree as ET
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 from app.scanners.base import ScannedItem
 
-EBOOK_EXTENSIONS = {".epub", ".mobi", ".azw3", ".pdf", ".cbz", ".cbr"}
+EBOOK_EXTENSIONS = {".epub", ".mobi", ".azw3", ".pdf"}
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".m4b", ".flac", ".ogg", ".opus"}
+COMIC_EXTENSIONS = {".cbz", ".cbr"}
 
 
 class FilesystemScanner:
@@ -18,12 +21,17 @@ class FilesystemScanner:
         for dirpath, _, filenames in os.walk(root):
             for filename in filenames:
                 ext = Path(filename).suffix.lower()
-                if ext not in EBOOK_EXTENSIONS and ext not in AUDIO_EXTENSIONS:
+                if ext not in EBOOK_EXTENSIONS and ext not in AUDIO_EXTENSIONS and ext not in COMIC_EXTENSIONS:
                     continue
 
                 full_path = Path(dirpath) / filename
                 file_size = full_path.stat().st_size
-                media_type = "audiobook" if ext in AUDIO_EXTENSIONS else "ebook"
+                if ext in AUDIO_EXTENSIONS:
+                    media_type = "audiobook"
+                elif ext in COMIC_EXTENSIONS:
+                    media_type = "comic"
+                else:
+                    media_type = "ebook"
 
                 item = ScannedItem(
                     file_path=str(full_path),
@@ -34,6 +42,8 @@ class FilesystemScanner:
 
                 if ext == ".epub":
                     _extract_epub_metadata(full_path, item)
+                elif ext in COMIC_EXTENSIONS:
+                    _extract_comic_metadata(full_path, item)
                 elif ext in AUDIO_EXTENSIONS:
                     _extract_audio_metadata(full_path, item)
 
@@ -77,6 +87,20 @@ def _extract_epub_metadata(path: Path, item: ScannedItem) -> None:
             if val and len(val) in (10, 13) and val.replace("-", "").isdigit():
                 item.isbn = val.replace("-", "")
                 break
+    except Exception:
+        pass
+
+
+def _extract_comic_metadata(path: Path, item: ScannedItem) -> None:
+    try:
+        with zipfile.ZipFile(str(path)) as zf:
+            if 'ComicInfo.xml' in zf.namelist():
+                info = ET.fromstring(zf.read('ComicInfo.xml'))
+                item.title = info.findtext('Title') or item.title
+                item.author = info.findtext('Writer') or item.author
+                series_name = info.findtext('Series')
+                if series_name:
+                    item.series = series_name
     except Exception:
         pass
 
