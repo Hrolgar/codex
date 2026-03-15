@@ -48,6 +48,8 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         # Add columns that may be missing from older DB schemas
         await _add_column_if_missing(conn, 'books', 'hardcover_slug', 'VARCHAR')
+        await _add_column_if_missing(conn, 'root_folders', 'scan_status', 'VARCHAR(20)', "'idle'")
+        await _add_column_if_missing(conn, 'root_folders', 'last_scan_at', 'TIMESTAMP')
 
     # Store session factory on app state for WebSocket access
     app.state.db_session = async_session

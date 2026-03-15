@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import os
 import shutil
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.root_folder import RootFolder
+from app.services.scanner_service import run_scan
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,8 @@ class RootFolderResponse(BaseModel):
     path: str
     media_type: str
     default: bool
+    scan_status: str = "idle"
+    last_scan_at: datetime | None = None
     free_space: int | None = None
     total_space: int | None = None
 
@@ -67,8 +72,22 @@ class BrowseResponse(BaseModel):
     directories: list[BrowseDirectoryEntry]
 
 
+_HIDDEN_PATHS = frozenset({
+    "/proc", "/sys", "/dev", "/usr", "/var", "/bin", "/sbin",
+    "/root", "/tmp", "/etc", "/lib", "/lib64", "/opt", "/run",
+    "/srv", "/boot", "/app",
+})
+
+
 def _is_blocked_path(real_path: str) -> bool:
-    """No paths are blocked — Docker controls access via volume mounts."""
+    """Hide system directories from the browse listing."""
+    # Check if the path itself or its top-level directory is in the blocklist
+    if real_path in _HIDDEN_PATHS:
+        return True
+    # Check if path is under a hidden top-level directory
+    parts = real_path.split("/")
+    if len(parts) >= 2 and f"/{parts[1]}" in _HIDDEN_PATHS:
+        return True
     return False
 
 
@@ -79,15 +98,10 @@ async def browse_directories(path: str = "/"):
     """List directories at the given path for the folder browser UI."""
     real = os.path.realpath(path)
 
-    if _is_blocked_path(real):
-        raise HTTPException(status_code=403, detail="Access to this path is restricted.")
-
     if not os.path.isdir(real):
         raise HTTPException(status_code=404, detail="Path does not exist or is not a directory.")
 
     parent = os.path.dirname(real) if real != "/" else None
-    if parent is not None and _is_blocked_path(parent):
-        parent = None
 
     directories: list[BrowseDirectoryEntry] = []
     try:
@@ -127,6 +141,8 @@ async def list_root_folders(db: AsyncSession = Depends(get_db)):
             path=f.path,
             media_type=f.media_type,
             default=f.default,
+            scan_status=f.scan_status,
+            last_scan_at=f.last_scan_at,
             free_space=free,
             total_space=total,
         ))
@@ -167,6 +183,9 @@ async def create_root_folder(data: RootFolderCreate, db: AsyncSession = Depends(
     await db.commit()
     await db.refresh(folder)
 
+    # Auto-trigger a scan in the background
+    asyncio.create_task(run_scan(folder.id))
+
     total, free = _get_disk_usage(folder.path)
     return RootFolderResponse(
         id=folder.id,
@@ -174,9 +193,23 @@ async def create_root_folder(data: RootFolderCreate, db: AsyncSession = Depends(
         path=folder.path,
         media_type=folder.media_type,
         default=folder.default,
+        scan_status=folder.scan_status,
+        last_scan_at=folder.last_scan_at,
         free_space=free,
         total_space=total,
     )
+
+
+@router.post("/{folder_id}/scan", status_code=202)
+async def trigger_scan(folder_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Manually trigger a re-scan of a root folder."""
+    folder = await db.get(RootFolder, folder_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail="Root folder not found")
+    if folder.scan_status == "scanning":
+        raise HTTPException(status_code=409, detail="Scan already in progress")
+    asyncio.create_task(run_scan(folder.id))
+    return {"status": "scanning"}
 
 
 @router.put("/{folder_id}", response_model=RootFolderResponse)
@@ -214,6 +247,8 @@ async def update_root_folder(
         path=folder.path,
         media_type=folder.media_type,
         default=folder.default,
+        scan_status=folder.scan_status,
+        last_scan_at=folder.last_scan_at,
         free_space=free,
         total_space=total,
     )

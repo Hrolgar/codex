@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Book, Library, LibraryItem
+from app.models import Book, LibraryItem, RootFolder
 from app.services import settings_service
 
 router = APIRouter()
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("/stats")
 async def stats(db: AsyncSession = Depends(get_db)):
     books_count = await db.scalar(select(func.count(Book.id)))
-    libraries_count = await db.scalar(select(func.count(Library.id)))
+    libraries_count = await db.scalar(select(func.count(RootFolder.id)))
     items_count = await db.scalar(select(func.count(LibraryItem.id)))
     ebooks_count = await db.scalar(
         select(func.count(Book.id)).where(Book.media_type == "ebook")

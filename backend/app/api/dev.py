@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Book, Author, BookAuthor, Library, LibraryItem, Series, SeriesBook
+from app.models import Book, Author, BookAuthor, LibraryItem, RootFolder, Series, SeriesBook
 from app.metadata.openlibrary import get_cover_url
 from app.services.entity_service import (
     get_or_create_author,
@@ -26,11 +26,11 @@ def _check_dev_mode():
 async def seed(db: AsyncSession = Depends(get_db)):
     _check_dev_mode()
 
-    # Create demo library
-    result = await db.execute(select(Library).where(Library.name == "Demo Library"))
+    # Create demo root folder
+    result = await db.execute(select(RootFolder).where(RootFolder.name == "Demo Library"))
     lib = result.scalar_one_or_none()
     if not lib:
-        lib = Library(name="Demo Library", scanner_type="filesystem", config={"path": "/books"})
+        lib = RootFolder(name="Demo Library", path="/books", media_type="ebook")
         db.add(lib)
         await db.flush()
 
@@ -96,7 +96,7 @@ async def seed(db: AsyncSession = Depends(get_db)):
 async def clear(db: AsyncSession = Depends(get_db)):
     _check_dev_mode()
 
-    for model in [LibraryItem, SeriesBook, BookAuthor, Book, Series, Author, Library]:
+    for model in [LibraryItem, SeriesBook, BookAuthor, Book, Series, Author, RootFolder]:
         await db.execute(model.__table__.delete())
     await db.commit()
     return {"status": "cleared"}

@@ -4,57 +4,46 @@ import uuid
 from sqlalchemy import select
 
 from app.database import async_session
-from app.models import Book, Library, LibraryItem
+from app.models import Book, LibraryItem, RootFolder
 from app.models.author import Author, BookAuthor
 from app.models.series import Series, SeriesBook
-from app.scanners.audiobookshelf import AudiobookshelfScanner
 from app.scanners.base import ScannedItem
 from app.scanners.filesystem import FilesystemScanner
 from app.services.metadata_service import MetadataService
 
 logger = logging.getLogger(__name__)
 
-SCANNERS = {
-    "audiobookshelf": AudiobookshelfScanner,
-    "filesystem": FilesystemScanner,
-}
 
-
-async def run_scan(library_id: uuid.UUID) -> None:
-    """Background task: scan a library and create/update records."""
+async def run_scan(root_folder_id: uuid.UUID) -> None:
+    """Background task: scan a root folder and create/update records."""
     async with async_session() as db:
-        library = await db.get(Library, library_id)
-        if not library:
+        root_folder = await db.get(RootFolder, root_folder_id)
+        if not root_folder:
             return
 
-        scanner_cls = SCANNERS.get(library.scanner_type)
-        if not scanner_cls:
-            logger.error("Unknown scanner type: %s", library.scanner_type)
-            return
-
-        scanner = scanner_cls()
-        library.scan_status = "scanning"
+        scanner = FilesystemScanner()
+        root_folder.scan_status = "scanning"
         await db.commit()
 
         try:
-            config = library.config or {}
+            config = {"path": root_folder.path}
             async for scanned in scanner.scan(config):
-                await _process_item(db, library, scanned)
-            library.scan_status = "idle"
+                await _process_item(db, root_folder, scanned)
+            root_folder.scan_status = "idle"
         except Exception:
-            logger.exception("Scan failed for library %s", library_id)
-            library.scan_status = "error"
+            logger.exception("Scan failed for root folder %s", root_folder_id)
+            root_folder.scan_status = "error"
         finally:
             from sqlalchemy import func
-            library.last_scan_at = func.now()
+            root_folder.last_scan_at = func.now()
             await db.commit()
 
 
-async def _process_item(db, library: Library, item: ScannedItem) -> None:
-    # Check if we already have this file path in this library
+async def _process_item(db, root_folder: RootFolder, item: ScannedItem) -> None:
+    # Check if we already have this file path in this root folder
     existing = await db.execute(
         select(LibraryItem).where(
-            LibraryItem.library_id == library.id,
+            LibraryItem.library_id == root_folder.id,
             LibraryItem.file_path == item.file_path,
         )
     )
@@ -131,7 +120,7 @@ async def _process_item(db, library: Library, item: ScannedItem) -> None:
             db.add(SeriesBook(series_id=series.id, book_id=book.id))
 
     lib_item = LibraryItem(
-        library_id=library.id,
+        library_id=root_folder.id,
         book_id=book.id,
         file_path=item.file_path,
         file_format=item.file_format,

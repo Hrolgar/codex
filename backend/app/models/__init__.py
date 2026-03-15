@@ -2,7 +2,7 @@ from app.models.author import Author, BookAuthor
 from app.models.book import Base, Book
 from app.models.download import Download
 from app.models.edition import Edition
-from app.models.library import Library, LibraryItem
+from app.models.library import LibraryItem
 from app.models.notification import Notification
 from app.models.root_folder import RootFolder
 from app.models.series import Series, SeriesBook
@@ -16,7 +16,6 @@ __all__ = [
     "BookAuthor",
     "Series",
     "SeriesBook",
-    "Library",
     "LibraryItem",
     "Download",
     "Edition",
