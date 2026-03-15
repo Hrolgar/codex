@@ -31,6 +31,11 @@ class BookCreate(BaseModel):
     asin: str | None = None
 
 
+class ReadStatusUpdate(BaseModel):
+    read_status: str  # unread | reading | read
+    date_read: datetime | None = None
+
+
 class LibraryItemBrief(BaseModel):
     id: uuid.UUID
     library_id: uuid.UUID
@@ -57,6 +62,8 @@ class BookResponse(BaseModel):
     asin: str | None = None
     openlibrary_key: str | None = None
     metadata_source: str | None = None
+    read_status: str = "unread"
+    date_read: datetime | None = None
     authors: list[AuthorBrief] = []
     series: list[SeriesBrief] = []
     library_items: list[LibraryItemBrief] = []

@@ -1,6 +1,8 @@
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { getBook } from "@/api/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getBook, updateBookStatus } from "@/api/client";
+import type { ReadingStatus } from "@/api/client";
+import { useToast } from "@/contexts/ToastContext";
 import { ArrowLeft, BookOpen, Headphones, Clock, FileText } from "lucide-react";
 
 function formatDuration(seconds: number): string {
@@ -9,24 +11,44 @@ function formatDuration(seconds: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+const STATUS_OPTIONS: { value: ReadingStatus; label: string; color: string }[] = [
+  { value: "unread", label: "Unread", color: "text-gray-400 bg-gray-700" },
+  { value: "reading", label: "Reading", color: "text-yellow-400 bg-yellow-500/15" },
+  { value: "read", label: "Read", color: "text-green-400 bg-green-500/15" },
+];
+
 export default function BookDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
+
   const { data: book, isLoading, error } = useQuery({
     queryKey: ["book", id],
     queryFn: () => getBook(id!),
     enabled: !!id,
   });
 
+  const statusMutation = useMutation({
+    mutationFn: (status: ReadingStatus) => updateBookStatus(id!, status),
+    onSuccess: (_, status) => {
+      queryClient.invalidateQueries({ queryKey: ["book", id] });
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      const label = STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
+      addToast(`Marked as ${label}`);
+    },
+    onError: () => addToast("Failed to update status", "error"),
+  });
+
   if (isLoading) {
     return (
-      <div className="animate-pulse space-y-6">
-        <div className="h-6 w-32 bg-gray-800 rounded" />
-        <div className="flex gap-8">
-          <div className="w-64 aspect-[2/3] bg-gray-800 rounded-lg shrink-0" />
+      <div className="space-y-6">
+        <div className="h-6 w-32 skeleton rounded" />
+        <div className="flex flex-col md:flex-row gap-8">
+          <div className="w-full md:w-64 aspect-[2/3] skeleton rounded-lg shrink-0" />
           <div className="space-y-4 flex-1">
-            <div className="h-8 bg-gray-800 rounded w-3/4" />
-            <div className="h-4 bg-gray-800 rounded w-1/2" />
-            <div className="h-20 bg-gray-800 rounded" />
+            <div className="h-8 skeleton rounded w-3/4" />
+            <div className="h-4 skeleton rounded w-1/2" />
+            <div className="h-20 skeleton rounded" />
           </div>
         </div>
       </div>
@@ -35,7 +57,8 @@ export default function BookDetailPage() {
 
   if (error || !book) {
     return (
-      <div className="text-center py-16">
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <BookOpen size={32} className="text-gray-700 mb-3" />
         <p className="text-gray-400 text-lg">Book not found</p>
         <Link to="/books" className="text-indigo-400 hover:text-indigo-300 text-sm mt-2 inline-block">
           Back to books
@@ -45,6 +68,7 @@ export default function BookDetailPage() {
   }
 
   const isAudiobook = book.media_type === "audiobook";
+  const currentStatus = (book.reading_status ?? "unread") as ReadingStatus;
 
   return (
     <div className="space-y-6">
@@ -97,9 +121,38 @@ export default function BookDetailPage() {
           {/* Series */}
           {book.series.length > 0 && (
             <p className="text-sm text-gray-400 mt-1">
-              {book.series.map((s) => `${s.name} #${s.position}`).join(", ")}
+              {book.series.map((s) => (
+                <Link
+                  key={s.id}
+                  to={`/series/${s.id}`}
+                  className="hover:text-indigo-400 transition-colors"
+                >
+                  {s.name} #{s.position}
+                </Link>
+              ))}
             </p>
           )}
+
+          {/* Reading Status */}
+          <div className="mt-4">
+            <span className="text-xs text-gray-500 block mb-1.5">Reading Status</span>
+            <div className="inline-flex rounded-lg overflow-hidden border border-gray-700">
+              {STATUS_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => statusMutation.mutate(opt.value)}
+                  disabled={statusMutation.isPending}
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                    currentStatus === opt.value
+                      ? opt.color
+                      : "text-gray-500 bg-gray-800 hover:bg-gray-700 hover:text-gray-300"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Meta row */}
           <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-400">
@@ -146,6 +199,18 @@ export default function BookDetailPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {book.library_items.length === 0 && (
+            <div className="mt-6 bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
+              <p className="text-sm text-gray-400">Not in your library yet</p>
+              <Link
+                to={`/search?q=${encodeURIComponent(book.title + " " + (book.authors[0]?.name ?? ""))}`}
+                className="inline-flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 mt-2 transition-colors"
+              >
+                Search for this book
+              </Link>
             </div>
           )}
         </div>
