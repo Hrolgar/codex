@@ -11,12 +11,16 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
+import re
+import unicodedata
+
 import httpx
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
+from app.models import Author, Book, BookAuthor
 from app.models.download import Download
 from app.schemas.download import DownloadResponse
 from app.services.settings_service import get_setting
@@ -61,6 +65,18 @@ def validate_download_url(url: str) -> None:
 def sanitize_filename(filename: str) -> str:
     """Sanitize a filename to prevent path traversal."""
     return os.path.basename(filename.replace("\x00", ""))
+
+
+def _sanitize_for_path(name: str, max_length: int = 100) -> str:
+    """Sanitize a string for use in file/directory names."""
+    # Normalize unicode
+    name = unicodedata.normalize("NFKD", name)
+    # Remove characters that are problematic in filenames
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", name)
+    # Collapse whitespace
+    name = " ".join(name.split())
+    # Trim to max length
+    return name[:max_length].strip(". ")
 
 
 # Track active download tasks for cancellation
@@ -191,11 +207,16 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
 
         # Move to final location
         temp_path.rename(final_path)
+
+        # Post-download: rename and organize by author/title
+        organized_path = await _organize_file(db, dl, final_path, download_dir)
+
         dl.status = "complete"
         dl.progress = 1.0
-        dl.target_path = str(final_path)
+        dl.target_path = str(organized_path)
         await db.commit()
         await _broadcast_progress(dl)
+        logger.info("Download complete: %s -> %s", dl.id, organized_path)
 
     except Exception as exc:
         logger.exception("Download failed for %s", dl.id)
@@ -208,6 +229,47 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
             temp_path.unlink(missing_ok=True)
         except Exception:
             pass
+
+
+async def _organize_file(
+    db: AsyncSession, dl: Download, current_path: Path, download_dir: Path
+) -> Path:
+    """Rename and move downloaded file into Author/Title structure."""
+    if not dl.book_id:
+        return current_path
+
+    book = await db.get(Book, dl.book_id)
+    if not book:
+        return current_path
+
+    # Get first author name
+    author_result = await db.execute(
+        select(Author.name)
+        .join(BookAuthor, Author.id == BookAuthor.author_id)
+        .where(BookAuthor.book_id == dl.book_id)
+        .limit(1)
+    )
+    author_row = author_result.first()
+    author_name = _sanitize_for_path(author_row[0]) if author_row else "Unknown"
+    title = _sanitize_for_path(book.title)
+
+    ext = current_path.suffix
+    new_filename = f"{author_name} - {title}{ext}"
+    organized_dir = download_dir / author_name
+    organized_dir.mkdir(parents=True, exist_ok=True)
+    organized_path = organized_dir / new_filename
+
+    # Verify the organized path stays inside download_dir
+    if not str(organized_path.resolve()).startswith(str(download_dir.resolve())):
+        logger.warning("Path traversal detected during organization, keeping original path")
+        return current_path
+
+    try:
+        current_path.rename(organized_path)
+        return organized_path
+    except OSError:
+        logger.warning("Failed to organize file, keeping at %s", current_path)
+        return current_path
 
 
 async def _broadcast_progress(dl: Download) -> None:

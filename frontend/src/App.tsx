@@ -7,6 +7,7 @@ import LibraryPage from "./pages/LibraryPage";
 import BookDetailPage from "./pages/BookDetailPage";
 import SearchPage from "./pages/SearchPage";
 import DownloadsPage from "./pages/DownloadsPage";
+import WishlistPage from "./pages/WishlistPage";
 import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/books/:id" element={<BookDetailPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/downloads" element={<DownloadsPage />} />
+        <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
     </AppLayout>

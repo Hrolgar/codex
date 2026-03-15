@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getSeriesDetail } from "@/api/client";
-import { ArrowLeft, BookOpen, Headphones } from "lucide-react";
+import { ArrowLeft, BookOpen, Headphones, Search, Check, X } from "lucide-react";
 
 export default function SeriesDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,13 +13,14 @@ export default function SeriesDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="animate-pulse space-y-6">
-        <div className="h-4 w-24 bg-gray-800 rounded" />
-        <div className="h-8 w-48 bg-gray-800 rounded" />
-        <div className="h-4 w-32 bg-gray-800 rounded" />
+      <div className="space-y-6">
+        <div className="h-4 w-24 skeleton rounded" />
+        <div className="h-8 w-48 skeleton rounded" />
+        <div className="h-4 w-32 skeleton rounded" />
+        <div className="h-6 w-full skeleton rounded-full" />
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 bg-gray-800 rounded-lg" />
+            <div key={i} className="h-20 skeleton rounded-lg" />
           ))}
         </div>
       </div>
@@ -28,7 +29,8 @@ export default function SeriesDetailPage() {
 
   if (error || !series) {
     return (
-      <div className="text-center py-16">
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <BookOpen size={32} className="text-gray-700 mb-3" />
         <p className="text-gray-400 text-lg">Series not found</p>
         <Link to="/" className="text-indigo-400 hover:text-indigo-300 text-sm mt-2 inline-block">
           Back to authors
@@ -37,7 +39,6 @@ export default function SeriesDetailPage() {
     );
   }
 
-  // Sort books by position, nulls last
   const sortedBooks = [...series.books].sort((a, b) => {
     if (a.position === null && b.position === null) return 0;
     if (a.position === null) return 1;
@@ -45,13 +46,19 @@ export default function SeriesDetailPage() {
     return a.position - b.position;
   });
 
-  // Back link: go to first author if available, otherwise authors list
+  const ownedCount = sortedBooks.filter((b) => b.owned).length;
+  const totalCount = sortedBooks.length;
+  const pct = totalCount > 0 ? Math.round((ownedCount / totalCount) * 100) : 0;
+  const missingBooks = sortedBooks.filter((b) => !b.owned);
+
   const backTo = series.authors.length > 0
     ? `/authors/${series.authors[0].id}`
     : "/";
   const backLabel = series.authors.length > 0
     ? series.authors[0].name
     : "Authors";
+
+  const authorName = series.authors.map((a) => a.name).join(", ");
 
   return (
     <div className="space-y-6">
@@ -65,28 +72,62 @@ export default function SeriesDetailPage() {
         </Link>
         <h1 className="text-2xl font-bold text-gray-100 mt-3">{series.name}</h1>
         {series.authors.length > 0 && (
-          <p className="text-sm text-gray-400 mt-1">
-            by {series.authors.map((a) => a.name).join(", ")}
-          </p>
+          <p className="text-sm text-gray-400 mt-1">by {authorName}</p>
         )}
       </div>
 
+      {/* Progress bar */}
+      {totalCount > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-200">
+              Owned {ownedCount}/{totalCount} books
+            </span>
+            <span className="text-sm text-gray-400">{pct}%</span>
+          </div>
+          <div className="h-2.5 bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                pct === 100 ? "bg-green-500" : "bg-indigo-500"
+              }`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          {missingBooks.length > 0 && (
+            <div className="mt-3 flex justify-end">
+              <Link
+                to={`/search?q=${encodeURIComponent(series.name + " " + authorName)}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors"
+              >
+                <Search size={14} />
+                Search Missing ({missingBooks.length})
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Books list */}
       {sortedBooks.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {sortedBooks.map((book) => {
             const isAudiobook = book.media_type === "audiobook";
+            const owned = book.owned ?? false;
             return (
               <Link
                 key={book.id}
                 to={`/books/${book.id}`}
-                className="group flex items-center gap-4 bg-gray-900 rounded-lg border border-gray-800 hover:border-indigo-500/50 transition-colors p-3"
+                className={`group flex items-center gap-4 bg-gray-900 rounded-lg border transition-colors p-3 ${
+                  owned
+                    ? "border-gray-800 hover:border-indigo-500/50"
+                    : "border-gray-800/60 hover:border-gray-700 opacity-70"
+                }`}
               >
                 {/* Position */}
-                <div className="w-8 text-center shrink-0">
+                <div className="w-10 text-center shrink-0">
                   {book.position !== null ? (
-                    <span className="text-lg font-bold text-gray-500">
-                      {book.position}
+                    <span className="text-sm font-mono font-bold text-gray-500">
+                      #{book.position}
                     </span>
                   ) : (
                     <span className="text-sm text-gray-600">—</span>
@@ -130,6 +171,21 @@ export default function SeriesDetailPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Owned status */}
+                <div className="shrink-0">
+                  {owned ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-400">
+                      <Check size={14} />
+                      Owned
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                      <X size={14} />
+                      Missing
+                    </span>
+                  )}
+                </div>
               </Link>
             );
           })}
@@ -138,6 +194,13 @@ export default function SeriesDetailPage() {
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <BookOpen size={32} className="text-gray-700 mb-3" />
           <p className="text-gray-400">No books in this series</p>
+          <Link
+            to={`/search?q=${encodeURIComponent(series.name)}`}
+            className="mt-3 inline-flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300"
+          >
+            <Search size={14} />
+            Search for books
+          </Link>
         </div>
       )}
     </div>
