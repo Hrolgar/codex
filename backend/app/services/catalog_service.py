@@ -143,7 +143,9 @@ RATE_LIMIT_DELAY = 0.5
 
 async def _ol_get(client: httpx.AsyncClient, path: str, params: dict | None = None) -> dict | None:
     """Make a rate-limited GET request to OpenLibrary."""
-    await asyncio.sleep(RATE_LIMIT_DELAY)
+    from app.services.rate_limiter import get_limiter
+
+    await get_limiter('openlibrary').acquire()
     try:
         resp = await client.get(f"{OL_BASE}{path}", params=params)
         if resp.status_code == 404:

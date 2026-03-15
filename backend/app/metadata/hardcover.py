@@ -46,6 +46,8 @@ def _normalize_editions(editions: list[dict]) -> list[dict]:
 
 
 async def _query(api_key: str, query: str, variables: dict | None = None) -> dict:
+    from app.services.rate_limiter import get_limiter
+
     # Strip 'Bearer ' prefix if user pasted it with the token
     if api_key.startswith('Bearer '):
         api_key = api_key[7:]
@@ -53,6 +55,7 @@ async def _query(api_key: str, query: str, variables: dict | None = None) -> dic
     body = {'query': query}
     if variables:
         body['variables'] = variables
+    await get_limiter('hardcover').acquire()
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(HARDCOVER_URL, json=body, headers=headers)
         resp.raise_for_status()

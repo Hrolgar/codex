@@ -1,6 +1,7 @@
 import httpx
 
 from app.metadata.base import MetadataResult
+from app.services.rate_limiter import get_limiter
 
 BASE_URL = "https://openlibrary.org"
 COVERS_BASE_URL = "https://covers.openlibrary.org"
@@ -19,6 +20,7 @@ class OpenLibraryProvider:
         if author:
             params["author"] = author
 
+        await get_limiter('openlibrary').acquire()
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(f"{BASE_URL}/search.json", params=params)
             resp.raise_for_status()
@@ -45,6 +47,7 @@ class OpenLibraryProvider:
         return results
 
     async def lookup_isbn(self, isbn: str) -> MetadataResult | None:
+        await get_limiter('openlibrary').acquire()
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(f"{BASE_URL}/isbn/{isbn}.json")
             if resp.status_code == 404:
@@ -56,6 +59,7 @@ class OpenLibraryProvider:
         for author_ref in data.get("authors", []):
             key = author_ref.get("key")
             if key:
+                await get_limiter('openlibrary').acquire()
                 async with httpx.AsyncClient(timeout=10) as client:
                     a_resp = await client.get(f"{BASE_URL}{key}.json")
                     if a_resp.status_code == 200:

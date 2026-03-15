@@ -98,7 +98,9 @@ async def _process_item(db, root_folder: RootFolder, item: ScannedItem) -> Autho
         db.add(book)
         await db.flush()
 
-        # Try to enrich with metadata
+        # Enrich with metadata — called once per book (not per track).
+        # Audiobook grouping (Phase 1a) yields one ScannedItem per directory,
+        # so each book is only enriched once here.
         try:
             svc = MetadataService(db)
             await svc.enrich_book(book)
