@@ -443,6 +443,8 @@ export interface RootFolder {
   default: boolean;
   free_space: number;
   total_space: number;
+  scan_status: string;
+  last_scan_at: string | null;
 }
 
 export function getRootFolders() {
@@ -463,6 +465,12 @@ export function addRootFolder(data: {
 
 export function deleteRootFolder(id: string) {
   return request<void>("/root-folders/" + id, { method: "DELETE" });
+}
+
+export function scanRootFolder(id: string) {
+  return request<{ status: string }>("/root-folders/" + id + "/scan", {
+    method: "POST",
+  });
 }
 
 export interface BrowseResult {

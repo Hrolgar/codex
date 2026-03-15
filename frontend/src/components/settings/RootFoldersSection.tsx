@@ -4,9 +4,10 @@ import {
   getRootFolders,
   addRootFolder,
   deleteRootFolder,
+  scanRootFolder,
   type RootFolder,
 } from "@/api/client";
-import { Trash2, Plus, Loader2, FolderOpen, HardDrive, Search } from "lucide-react";
+import { Trash2, Plus, Loader2, FolderOpen, HardDrive, Search, RefreshCw } from "lucide-react";
 import FolderBrowserModal from "./FolderBrowserModal";
 
 function formatBytes(bytes: number) {
@@ -16,6 +17,17 @@ function formatBytes(bytes: number) {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 const MEDIA_TYPES = ["ebook", "audiobook", "comic"];
@@ -44,6 +56,13 @@ export default function RootFoldersSection() {
 
   const deleteMutation = useMutation({
     mutationFn: deleteRootFolder,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["root-folders"] });
+    },
+  });
+
+  const scanMutation = useMutation({
+    mutationFn: scanRootFolder,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["root-folders"] });
     },
@@ -139,16 +158,37 @@ export default function RootFoldersSection() {
                       ) : (
                         <p className="text-[11px] text-gray-500 mt-1">Disk space: Unknown</p>
                       )}
+                      {folder.last_scan_at && (
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Last scanned {timeAgo(folder.last_scan_at)}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => deleteMutation.mutate(folder.id)}
-                    disabled={deleteMutation.isPending}
-                    className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors flex-shrink-0"
-                    title="Delete root folder"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {folder.scan_status === "scanning" && (
+                      <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" title="Scanning" />
+                    )}
+                    {folder.scan_status === "error" && (
+                      <span className="w-2 h-2 rounded-full bg-red-500 inline-block" title="Scan error" />
+                    )}
+                    <button
+                      onClick={() => scanMutation.mutate(folder.id)}
+                      disabled={scanMutation.isPending || folder.scan_status === "scanning"}
+                      className="p-1.5 text-gray-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-colors"
+                      title="Scan folder"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${scanMutation.isPending && scanMutation.variables === folder.id ? "animate-spin" : ""}`} />
+                    </button>
+                    <button
+                      onClick={() => deleteMutation.mutate(folder.id)}
+                      disabled={deleteMutation.isPending}
+                      className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                      title="Delete root folder"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
