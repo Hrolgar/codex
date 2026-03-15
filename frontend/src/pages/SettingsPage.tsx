@@ -162,7 +162,27 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-gray-100">
                     {lib.name}
                   </p>
-                  <p className="text-xs text-gray-500">{lib.scanner_type}</p>
+                  <p className="text-xs text-gray-500">
+                    {lib.scanner_type}
+                    {" · "}
+                    <span
+                      className={
+                        lib.scan_status === "scanning"
+                          ? "text-yellow-400"
+                          : lib.scan_status === "error"
+                            ? "text-red-400"
+                            : "text-gray-500"
+                      }
+                    >
+                      {lib.scan_status}
+                    </span>
+                    {lib.last_scan_at && (
+                      <>
+                        {" · last scan "}
+                        {new Date(lib.last_scan_at).toLocaleString()}
+                      </>
+                    )}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">

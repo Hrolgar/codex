@@ -120,9 +120,12 @@ export interface Library {
   id: string;
   name: string;
   scanner_type: string;
-  path?: string;
-  url?: string;
-  api_key?: string;
+  scan_status: string;
+  last_scan_at: string | null;
+  created_at: string;
+  updated_at: string;
+  path: string | null;
+  url: string | null;
 }
 
 export interface SystemStats {
