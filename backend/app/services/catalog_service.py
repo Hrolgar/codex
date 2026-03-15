@@ -1,4 +1,8 @@
-"""Catalog service for managing monitored authors and their bibliographies via OpenLibrary."""
+"""Catalog service for managing monitored authors and their bibliographies."""
+
+# TODO: Implement Hardcover and Google Books catalog providers
+# Currently only OpenLibrary is supported for author catalog fetching.
+# When Hardcover provider is added, it should return audiobook data too.
 
 import asyncio
 import logging
@@ -162,11 +166,26 @@ def _pick_best_edition(editions: list[dict]) -> dict | None:
 
 
 async def create_monitored_author(db: AsyncSession, name: str) -> Author:
-    """Search OpenLibrary for an author and create/update them as monitored.
+    """Search for an author using the configured provider and create/update them as monitored.
 
     This is the synchronous part — does NOT fetch the full catalog.
     Use refresh_author_catalog() separately for that.
     """
+    provider = await get_setting(db, 'search.book_provider') or 'openlibrary'
+
+    if provider == 'hardcover':
+        logger.info("Hardcover catalog provider not yet implemented, falling back to OpenLibrary")
+    elif provider == 'google':
+        logger.info("Google Books catalog provider not yet implemented, falling back to OpenLibrary")
+
+    # Check if Hardcover is configured with an API key for better author photos
+    hardcover_enabled = await get_setting(db, 'metadata.hardcover.enabled')
+    hardcover_api_key = await get_setting(db, 'metadata.hardcover.api_key')
+    use_hardcover_photo = (
+        hardcover_enabled and hardcover_enabled.lower() == 'true'
+        and hardcover_api_key and hardcover_api_key.strip()
+    )
+
     async with httpx.AsyncClient(timeout=15) as client:
         # Step 1: Search for the author on OpenLibrary
         data = await _ol_get(client, "/search/authors.json", params={"q": name})
@@ -192,8 +211,64 @@ async def create_monitored_author(db: AsyncSession, name: str) -> Author:
             author.bio = _extract_bio(author_data)
             author.photo_url = _author_photo_url(ol_key)
 
+        # Step 4: Try Hardcover for a better author photo if configured
+        if use_hardcover_photo:
+            try:
+                hc_photo = await _fetch_hardcover_author_photo(client, name, hardcover_api_key)
+                if hc_photo:
+                    logger.info("Using Hardcover author photo for %s", author_name)
+                    author.photo_url = hc_photo
+            except Exception:
+                logger.debug("Hardcover author photo fetch failed for %s, keeping OpenLibrary photo", author_name)
+
     await db.commit()
     return author
+
+
+async def _fetch_hardcover_author_photo(
+    client: httpx.AsyncClient, author_name: str, api_key: str
+) -> str | None:
+    """Try to fetch a higher-quality author photo from Hardcover's GraphQL API."""
+    query = """
+    query AuthorSearch($query: String!) {
+      search(query: $query, query_type: "authors", per_page: 1) {
+        results {
+          ... on AuthorResult {
+            hits {
+              document {
+                image
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+    try:
+        resp = await client.post(
+            "https://api.hardcover.app/v1/graphql",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={"query": query, "variables": {"query": author_name}},
+        )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        hits = (
+            data.get("data", {})
+            .get("search", {})
+            .get("results", [{}])[0]
+            .get("hits", [])
+        )
+        if hits:
+            image = hits[0].get("document", {}).get("image")
+            if image and isinstance(image, str) and image.startswith("http"):
+                return image
+    except Exception:
+        logger.debug("Hardcover GraphQL request failed for author %s", author_name)
+    return None
 
 
 async def add_author(db: AsyncSession, name: str) -> Author:

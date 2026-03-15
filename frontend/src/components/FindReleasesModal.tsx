@@ -43,8 +43,9 @@ export default function FindReleasesModal({
   mediaType,
 }: FindReleasesModalProps) {
   const { addToast } = useToast();
-  const searchQuery = [bookTitle, bookAuthor].filter(Boolean).join(" ");
+  const defaultQuery = [bookTitle, bookAuthor].filter(Boolean).join(" ");
 
+  const [searchQuery, setSearchQuery] = useState(defaultQuery);
   const [activeTab, setActiveTab] = useState("prowlarr");
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("seeders");
@@ -69,11 +70,12 @@ export default function FindReleasesModal({
 
   useEffect(() => {
     if (open) {
+      setSearchQuery(defaultQuery);
       setFilter("");
       setSortKey("seeders");
       setSortDir("desc");
     }
-  }, [open]);
+  }, [open, defaultQuery]);
 
   const downloadMutation = useMutation({
     mutationFn: (result: SearchResult) =>
@@ -159,9 +161,28 @@ export default function FindReleasesModal({
             <Search size={18} />
             Find Releases
           </h2>
-          <p className="text-sm text-gray-400 mt-0.5">
-            Searching for: <span className="text-gray-300">{searchQuery}</span>
-          </p>
+          <form
+            className="flex items-center gap-2 mt-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              refetch();
+            }}
+          >
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-colors"
+              placeholder="Search query..."
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !searchQuery.trim()}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+            >
+              Search
+            </button>
+          </form>
 
           {/* Tabs */}
           <div className="flex gap-1 mt-4 border-b border-gray-800">

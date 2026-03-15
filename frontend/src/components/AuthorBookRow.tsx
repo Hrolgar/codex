@@ -109,7 +109,7 @@ export default function AuthorBookRow({ book, authorName, onSearch }: Props) {
                 <span className='text-gray-600'>Not Found</span>
               )}
               <button
-                onClick={() => onSearch(book.title + ' ' + ed.language, authorName, book.media_type)}
+                onClick={() => onSearch(book.title, authorName, book.media_type)}
                 className='p-1 text-gray-600 hover:text-indigo-400 transition-colors ml-auto'
                 title={'Search for ' + ed.language.toUpperCase() + ' edition'}
               >
