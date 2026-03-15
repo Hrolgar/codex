@@ -26,6 +26,15 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
 
     # General
     "general.languages": ("Languages", "Comma-separated language codes to include (e.g. en,no). Leave empty for all.", "general", False),
+
+    # Auto-download
+    "auto_download.interval_hours": ("Check Interval (hours)", "How often to check wishlist for auto-downloads (default: 6)", "auto_download", False),
+
+    # Catalog
+    "catalog.refresh_interval_hours": ("Refresh Interval (hours)", "How often to refresh monitored author catalogs (default: 24)", "catalog", False),
+
+    # Notifications
+    "notifications.discord_webhook_url": ("Discord Webhook URL", "Discord webhook URL for sending notifications", "notifications", False),
 }
 
 

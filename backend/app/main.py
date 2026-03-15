@@ -44,23 +44,76 @@ async def lifespan(app: FastAPI):
     from app.services.download_service import process_download_queue
     task = asyncio.create_task(process_download_queue())
 
-    # Periodic auto-download check (every 6 hours)
-    async def _periodic_tasks():
+    # --- Periodic background tasks ---
+
+    async def _get_interval(key: str, default: float) -> float:
+        """Read an interval setting (in hours) from the DB, fall back to default."""
+        try:
+            async with async_session() as db:
+                from app.services.settings_service import get_setting
+                val = await get_setting(db, key)
+                if val:
+                    return max(float(val), 0.5)  # minimum 30 minutes
+        except Exception:
+            pass
+        return default
+
+    async def _auto_download_loop():
+        """Periodically check wishlist for auto-downloads."""
         while True:
-            await asyncio.sleep(6 * 3600)  # 6 hours
+            interval = await _get_interval("auto_download.interval_hours", 6)
+            await asyncio.sleep(interval * 3600)
             try:
                 async with async_session() as db:
                     from app.services.auto_download_service import check_wishlist_for_downloads
                     count = await check_wishlist_for_downloads(db)
                     if count:
-                        logger.info(f'Auto-download: started {count} downloads')
-            except Exception as e:
-                logger.warning(f'Periodic task error: {e}')
+                        logger.info("Auto-download: started %d downloads", count)
+            except Exception:
+                logger.warning("Auto-download periodic task error", exc_info=True)
 
-    periodic_task = asyncio.create_task(_periodic_tasks())
+    async def _catalog_refresh_loop():
+        """Periodically refresh all monitored authors."""
+        while True:
+            interval = await _get_interval("catalog.refresh_interval_hours", 24)
+            await asyncio.sleep(interval * 3600)
+            try:
+                async with async_session() as db:
+                    from sqlalchemy import select
+                    from app.models import Author
+                    from app.services.catalog_service import refresh_author_catalog
+                    from app.services.notification_service import notify
+
+                    result = await db.execute(
+                        select(Author).where(Author.monitored.is_(True))
+                    )
+                    authors = result.scalars().all()
+                    total_added = 0
+                    for author in authors:
+                        try:
+                            added = await refresh_author_catalog(db, author)
+                            if added:
+                                total_added += added
+                                await notify(
+                                    db,
+                                    title="New Books Found",
+                                    message=f"Found {added} new book(s) for {author.name}",
+                                    notification_type="info",
+                                )
+                        except Exception:
+                            logger.warning("Catalog refresh failed for %s", author.name, exc_info=True)
+                    if total_added:
+                        logger.info("Catalog refresh: added %d books total", total_added)
+            except Exception:
+                logger.warning("Catalog refresh periodic task error", exc_info=True)
+
+    auto_dl_task = asyncio.create_task(_auto_download_loop())
+    catalog_task = asyncio.create_task(_catalog_refresh_loop())
+
     yield
     task.cancel()
-    periodic_task.cancel()
+    auto_dl_task.cancel()
+    catalog_task.cancel()
     await engine.dispose()
 
 
