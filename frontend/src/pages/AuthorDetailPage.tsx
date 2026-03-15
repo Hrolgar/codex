@@ -335,7 +335,7 @@ export default function AuthorDetailPage() {
                   </div>
                 </div>
                 <span className="text-sm text-gray-400">
-                  {series.owned_count}/{series.book_count}
+                  {series.owned_count}/{series.book_count} owned
                 </span>
               </div>
             </button>

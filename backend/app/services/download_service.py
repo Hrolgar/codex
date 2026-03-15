@@ -13,9 +13,6 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
-import re
-import unicodedata
-
 import httpx
 from fastapi import HTTPException
 from sqlalchemy import select
