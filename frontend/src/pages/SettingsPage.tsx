@@ -250,11 +250,37 @@ function ComingSoon({ section }: { section: string }) {
 function GeneralSection() {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
+  const ss = useSettingsStore();
   const [name, setName] = useState("");
   const [scannerType, setScannerType] = useState("filesystem");
   const [path, setPath] = useState("");
   const [url, setUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [languages, setLanguages] = useState(ss.get("general.languages", "en,no"));
+
+  useEffect(() => {
+    if (ss.loaded) setLanguages(ss.get("general.languages", "en,no"));
+  }, [ss.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const LANG_CHIPS: { label: string; code: string }[] = [
+    { label: "English", code: "en" },
+    { label: "Norwegian", code: "no" },
+    { label: "Swedish", code: "sv" },
+    { label: "Danish", code: "da" },
+    { label: "German", code: "de" },
+    { label: "French", code: "fr" },
+    { label: "Spanish", code: "es" },
+  ];
+
+  function toggleLang(code: string) {
+    const codes = languages.split(",").map((c) => c.trim()).filter(Boolean);
+    const idx = codes.indexOf(code);
+    if (idx >= 0) codes.splice(idx, 1);
+    else codes.push(code);
+    setLanguages(codes.join(","));
+  }
+
+  const activeLangs = languages.split(",").map((c) => c.trim()).filter(Boolean);
 
   const { data: libraries } = useQuery({
     queryKey: ["libraries"],
@@ -399,6 +425,51 @@ function GeneralSection() {
 
       <FormatTags available={BOOK_FORMATS} selected={["EPUB", "MOBI", "AZW3", "CBZ", "CBR", "PDF"]} onChange={() => {}} label="Supported Book Formats" description="Book formats to include in search results." />
       <FormatTags available={AUDIO_FORMATS} selected={["M4B", "MP3", "M4A"]} onChange={() => {}} label="Supported Audiobook Formats" description="Audiobook formats to include in search results." />
+
+      <div>
+        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-1">Default Book Languages</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          Comma-separated language codes (e.g. en,no,sv). Only books in these languages will be fetched from metadata providers. Leave empty for all languages.
+        </p>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {LANG_CHIPS.map((lang) => {
+            const active = activeLangs.includes(lang.code);
+            return (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => toggleLang(lang.code)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                  active
+                    ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40"
+                    : "bg-gray-800 text-gray-500 border border-gray-700 hover:text-gray-300"
+                }`}
+              >
+                {lang.label} ({lang.code})
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={languages}
+            onChange={(e) => setLanguages(e.target.value)}
+            placeholder="en,no,sv"
+            className="flex-1 px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              ss.save({ "general.languages": languages });
+              addToast("Languages saved");
+            }}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            Save
+          </button>
+        </div>
+      </div>
     </SettingsSection>
   );
 }
