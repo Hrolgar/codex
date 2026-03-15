@@ -51,6 +51,50 @@ def _parse_language_codes(raw: str | None) -> set[str] | None:
     return codes if codes else None
 
 
+# Map 2-letter language codes to Hardcover's full language names
+_HC_LANG_MAP: dict[str, str] = {
+    "en": "English", "no": "Norwegian", "sv": "Swedish", "da": "Danish",
+    "fi": "Finnish", "de": "German", "fr": "French", "es": "Spanish; Castilian",
+    "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "ru": "Russian",
+    "pl": "Polish", "ja": "Japanese", "zh": "Chinese", "ko": "Korean",
+    "ar": "Arabic", "he": "Hebrew", "hi": "Hindi", "cs": "Czech",
+}
+
+
+def _parse_hc_languages(raw: str | None) -> set[str] | None:
+    """Parse general.languages setting into Hardcover full language names.
+
+    Returns None if no filtering should be applied.
+    """
+    if not raw or not raw.strip():
+        return None
+    names: set[str] = set()
+    for part in raw.split(","):
+        part = part.strip().lower()
+        if not part:
+            continue
+        mapped = _HC_LANG_MAP.get(part)
+        if mapped:
+            names.add(mapped)
+    return names if names else None
+
+
+def _hc_book_matches_language(book: dict, allowed: set[str]) -> bool:
+    """Check if a Hardcover book has any edition in an allowed language."""
+    for edition in book.get('editions', []):
+        lang = edition.get('language')
+        if isinstance(lang, dict):
+            lang_name = lang.get('language', '')
+        elif isinstance(lang, str):
+            lang_name = lang
+        else:
+            continue
+        if lang_name in allowed:
+            return True
+    # No editions with language info — exclude when filtering is active
+    return False
+
+
 # Map title prefixes to their OL 3-letter language codes.
 # Used as a cheap heuristic to detect obvious foreign-language titles
 # before fetching edition data from the API.
@@ -342,11 +386,18 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
 
     languages_raw = await get_setting(db, 'general.languages')
     languages = [l.strip() for l in (languages_raw or 'en').split(',') if l.strip()]
+    allowed_hc_langs = _parse_hc_languages(languages_raw)
 
     added = 0
+    excluded = 0
     for hc_book in hc_books:
         title = hc_book.get('title', '')
         if not title:
+            continue
+
+        # Filter by language if configured
+        if allowed_hc_langs and not _hc_book_matches_language(hc_book, allowed_hc_langs):
+            excluded += 1
             continue
 
         media_type = classify_media_type(hc_book)
@@ -373,6 +424,9 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
 
         await link_book_author(db, book.id, author.id)
         added += 1
+
+    if excluded:
+        logger.info('Hardcover catalog: excluded %d books for %s due to language filter', excluded, author.name)
 
     author.catalog_status = 'complete'
     await db.commit()
