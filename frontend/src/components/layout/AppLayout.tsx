@@ -2,11 +2,12 @@ import { ReactNode, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getNotifications } from "@/api/client";
-import { User, BookOpen as BookIcon, Search, Download, Star, Settings, Menu, X, BookOpen, Bell } from "lucide-react";
+import { User, BookOpen as BookIcon, Search, Download, Star, Settings, Menu, X, BookOpen, Bell, BookImage } from "lucide-react";
 
 const navItems = [
   { to: "/", icon: User, label: "Authors" },
   { to: "/books", icon: BookIcon, label: "All Books" },
+  { to: "/comics", icon: BookImage, label: "Comics" },
   { to: "/search", icon: Search, label: "Search" },
   { to: "/downloads", icon: Download, label: "Downloads" },
   { to: "/wishlist", icon: Star, label: "Wishlist" },

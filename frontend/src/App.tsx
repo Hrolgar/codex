@@ -19,6 +19,7 @@ export default function App() {
         <Route path="/authors/:id" element={<AuthorDetailPage />} />
         <Route path="/series/:id" element={<SeriesDetailPage />} />
         <Route path="/books" element={<LibraryPage />} />
+        <Route path="/comics" element={<LibraryPage initialMediaType="comic" title="Comics" />} />
         <Route path="/books/:id" element={<BookDetailPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/downloads" element={<DownloadsPage />} />

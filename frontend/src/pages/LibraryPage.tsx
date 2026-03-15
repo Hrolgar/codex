@@ -9,14 +9,19 @@ import SearchBar from "@/components/library/SearchBar";
 
 type SortOption = "title" | "author" | "date" | "status";
 
-export default function LibraryPage() {
+interface LibraryPageProps {
+  initialMediaType?: string;
+  title?: string;
+}
+
+export default function LibraryPage({ initialMediaType = "", title = "Library" }: LibraryPageProps) {
   const queryClient = useQueryClient();
   const seedMutation = useMutation({
     mutationFn: seedDemoData,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
   });
   const [search, setSearch] = useState("");
-  const [mediaType, setMediaType] = useState("");
+  const [mediaType, setMediaType] = useState(initialMediaType);
   const [readFilter, setReadFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("title");
   const [page, setPage] = useState(1);
@@ -98,7 +103,7 @@ export default function LibraryPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-100">Library</h2>
+          <h2 className="text-2xl font-bold text-gray-100">{title}</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             {data
               ? `${data.total.toLocaleString()} book${data.total !== 1 ? "s" : ""}`

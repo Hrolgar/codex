@@ -23,6 +23,7 @@ export default function SearchBar({
     { value: "", label: "All" },
     { value: "ebook", label: "eBooks" },
     { value: "audiobook", label: "Audiobooks" },
+    { value: "comic", label: "Comics" },
   ];
 
   return (
