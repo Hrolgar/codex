@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  getProwlarrIndexers,
   getLibraries,
   createLibrary,
   deleteLibrary,
@@ -9,6 +10,7 @@ import {
   getSettings,
   updateSettings,
   type SettingsCategory,
+  type ProwlarrIndexer,
 } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -28,8 +30,7 @@ import {
   ChevronRight,
   Zap,
   Loader2,
-  CheckCircle2,
-  AlertCircle,
+  HelpCircle,
 } from "lucide-react";
 
 // --- Sidebar nav items ---
@@ -401,6 +402,108 @@ function GeneralSection() {
   );
 }
 
+function renderTemplatePreview(template: string, data: Record<string, string>): string {
+  return template
+    .replace(/\{(\w+)\?([^}]*)\}/g, (_match, token: string, inner: string) => {
+      if (!data[token]) return "";
+      return inner.replace(/\{(\w+)\}/g, (_m: string, t: string) => data[t] ?? "");
+    })
+    .replace(/\{(\w+)\}/g, (_match, token: string) => data[token] ?? "");
+}
+
+const SERIES_SAMPLE: Record<string, string> = {
+  Author: "Brandon Sanderson",
+  Title: "The Way of Kings",
+  Series: "The Stormlight Archive",
+  SeriesPosition: "1",
+  Year: "2010",
+  Language: "en",
+  Edition: "Norwegian",
+  Format: "epub",
+  PartNumber: "1",
+  OriginalName: "the_way_of_kings",
+};
+
+const STANDALONE_SAMPLE: Record<string, string> = {
+  Author: "Brandon Sanderson",
+  Title: "The Way of Kings",
+  Series: "",
+  SeriesPosition: "",
+  Year: "2010",
+  Language: "en",
+  Edition: "Norwegian",
+  Format: "epub",
+  PartNumber: "",
+  OriginalName: "the_way_of_kings",
+};
+
+const TOKEN_HELP_ROWS: [string, string][] = [
+  ["{Author}", "Brandon Sanderson"],
+  ["{Title}", "The Way of Kings"],
+  ["{Series}", "The Stormlight Archive"],
+  ["{SeriesPosition}", "1"],
+  ["{Year}", "2010"],
+  ["{Language}", "en"],
+  ["{Edition}", "Norwegian"],
+  ["{Format}", "epub"],
+  ["{Series?...}", "Conditional: only renders if series exists"],
+];
+
+function PathTemplateField({ label, description, defaultValue }: { label: string; description: string; defaultValue: string }) {
+  const [value, setValue] = useState(defaultValue);
+  const [showHelp, setShowHelp] = useState(false);
+
+  const seriesPreview = renderTemplatePreview(value, SERIES_SAMPLE);
+  const standalonePreview = renderTemplatePreview(value, STANDALONE_SAMPLE);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
+        <label className="block text-sm font-medium text-gray-300">{label}</label>
+        <button
+          type="button"
+          onClick={() => setShowHelp(!showHelp)}
+          className="text-gray-500 hover:text-gray-300 transition-colors"
+          title="Show available tokens"
+        >
+          <HelpCircle size={14} />
+        </button>
+      </div>
+      {description && <p className="text-xs text-gray-500">{description}</p>}
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500 font-mono text-xs"
+      />
+      <div className="text-xs text-gray-500 space-y-0.5 pt-1">
+        <p>Series example: <span className="text-gray-400 font-mono">{seriesPreview || "(empty)"}</span></p>
+        <p>Standalone example: <span className="text-gray-400 font-mono">{standalonePreview || "(empty)"}</span></p>
+      </div>
+      {showHelp && (
+        <div className="mt-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-gray-400">
+                <th className="text-left pb-1 font-medium">Token</th>
+                <th className="text-left pb-1 font-medium">Example</th>
+              </tr>
+            </thead>
+            <tbody className="text-gray-300">
+              {TOKEN_HELP_ROWS.map(([token, example]) => (
+                <tr key={token}>
+                  <td className="py-0.5 font-mono text-indigo-400">{token}</td>
+                  <td className="py-0.5">{example}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DownloadsSection() {
   return (
     <SettingsSection title="Downloads" description="Configure where downloaded files are saved and how they're organized.">
@@ -416,9 +519,11 @@ function DownloadsSection() {
             <option value="rename">Rename and Organize</option>
           </select>
         </Field>
-        <Field label="Path Template" description="Use / to create folders. Variables: {Author}, {Title}, {Year}, {Series}, {SeriesPosition}, {OriginalName}.">
-          <input type="text" defaultValue="{Author}/{Series}/{SeriesPosition} - {Title}" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500 font-mono text-xs" />
-        </Field>
+        <PathTemplateField
+          label="Path Template"
+          description="Use / to create folders. Wrap sections in {Series?...} to only include them when a series exists."
+          defaultValue="{Author}/{Series?{Series}/{SeriesPosition} - }{Title}"
+        />
         <Toggle checked={true} onChange={() => {}} label="Hardlink Book Torrents" description="Create hardlinks instead of copying. Preserves seeding but archives won't be extracted." />
       </div>
 
@@ -436,10 +541,31 @@ function DownloadsSection() {
             <option value="rename">Rename and Organize</option>
           </select>
         </Field>
-        <Field label="Path Template" description="Use / to create folders. Variables: {Author}, {Title}, {Year}, {Series}, {SeriesPosition}, {PartNumber}.">
-          <input type="text" defaultValue="{Author}/{Series}/{SeriesPosition} - {Title}/{PartNumber} {Title}" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500 font-mono text-xs" />
-        </Field>
+        <PathTemplateField
+          label="Path Template"
+          description="Use / to create folders. Wrap sections in {Series?...} to only include them when a series exists."
+          defaultValue="{Author}/{Series?{Series}/{SeriesPosition} - }{Title}/{PartNumber} {Title}"
+        />
         <Toggle checked={true} onChange={() => {}} label="Hardlink Audiobook Torrents" description="Create hardlinks instead of copying. Preserves seeding but archives won't be extracted." />
+      </div>
+      <div className="border-t border-gray-800" />
+
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Comics</h3>
+        <p className="text-xs text-gray-500 -mt-2">Configure where comics are saved.</p>
+        <Field label="Destination" required description="Directory where downloaded comic files are saved.">
+          <input type="text" defaultValue="/downloads/comics" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500" />
+        </Field>
+        <Field label="File Organization">
+          <select defaultValue="rename" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500">
+            <option value="none">None</option>
+            <option value="rename">Rename and Organize</option>
+          </select>
+        </Field>
+        <Field label="Path Template" description="Use / to create folders. Variables: {Author}, {Title}, {Year}, {Series}, {SeriesPosition}, {OriginalName}.">
+          <input type="text" defaultValue="{Author}/{Series?{Series}/}{Title}" className="w-full px-3 py-2 bg-gray-950 border border-gray-800 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-indigo-500 font-mono text-xs" />
+        </Field>
+        <Toggle checked={true} onChange={() => {}} label="Hardlink Comics Torrents" description="Create hardlinks instead of copying. Preserves seeding but archives won't be extracted." />
       </div>
     </SettingsSection>
   );
@@ -492,14 +618,49 @@ function ProwlarrSection() {
   const [prowlarrKey, setProwlarrKey] = useState("");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [indexers, setIndexers] = useState<ProwlarrIndexer[]>([]);
+  const [selectedIndexers, setSelectedIndexers] = useState<Set<number>>(new Set());
+  const [loadingIndexers, setLoadingIndexers] = useState(false);
 
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
-    setTimeout(() => {
+    setConnected(false);
+    setIndexers([]);
+    try {
+      const res = await fetch("/api/system/settings/test-connection?provider=prowlarr");
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok) {
+        setTestResult(data.message ?? "Connected");
+        setConnected(true);
+        setLoadingIndexers(true);
+        try {
+          const idx = await getProwlarrIndexers();
+          setIndexers(idx);
+          setSelectedIndexers(new Set(idx.map((i) => i.id)));
+        } catch {
+          setIndexers([]);
+        } finally {
+          setLoadingIndexers(false);
+        }
+      } else {
+        setTestResult(data?.message ?? "Connection failed");
+      }
+    } catch {
+      setTestResult("Connection failed");
+    } finally {
       setTesting(false);
-      setTestResult(prowlarrUrl && prowlarrKey ? "Verify your Prowlarr configuration" : "URL and API Key required");
-    }, 1000);
+    }
+  };
+
+  const toggleIndexer = (id: number) => {
+    setSelectedIndexers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   return (
@@ -518,8 +679,45 @@ function ProwlarrSection() {
               {testing && <Loader2 size={14} className="animate-spin" />}
               Test Connection
             </button>
-            {testResult && <span className="text-sm text-gray-400">{testResult}</span>}
+            {testResult && (
+              <span className={`text-sm ${connected ? "text-green-400" : "text-gray-400"}`}>{testResult}</span>
+            )}
           </div>
+          {loadingIndexers && (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <Loader2 size={14} className="animate-spin" />
+              Loading indexers…
+            </div>
+          )}
+          {connected && indexers.length > 0 && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-300">Indexers</label>
+              <div className="flex flex-wrap gap-2">
+                {indexers.map((idx) => {
+                  const active = selectedIndexers.has(idx.id);
+                  return (
+                    <button
+                      key={idx.id}
+                      onClick={() => toggleIndexer(idx.id)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                        active
+                          ? "bg-cyan-600/20 border-cyan-500 text-cyan-300"
+                          : "bg-gray-900 border-gray-700 text-gray-500"
+                      }`}
+                    >
+                      {idx.name}
+                      <span className={`ml-1.5 text-[10px] uppercase ${active ? "text-indigo-400" : "text-gray-600"}`}>
+                        {idx.protocol}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {connected && indexers.length === 0 && !loadingIndexers && (
+            <p className="text-sm text-gray-500">No indexers found in Prowlarr.</p>
+          )}
           <Toggle checked={true} onChange={() => {}} label="Auto-expand search on no results" description="Automatically retry search without category filtering if no results are found" />
         </>
       )}
