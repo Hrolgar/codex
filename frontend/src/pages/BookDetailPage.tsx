@@ -1,14 +1,33 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getBook } from "@/api/client";
-import { ArrowLeft, BookOpen, Headphones, Clock, FileText, Search, ExternalLink } from "lucide-react";
+import { getBook, getSeriesDetail } from "@/api/client";
+import {
+  ArrowLeft,
+  BookOpen,
+  Headphones,
+  Clock,
+  FileText,
+  Search,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  HardDrive,
+  Image,
+} from "lucide-react";
 import FindReleasesModal from "@/components/FindReleasesModal";
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / 1073741824).toFixed(2)} GB`;
 }
 
 export default function BookDetailPage() {
@@ -19,6 +38,14 @@ export default function BookDetailPage() {
     queryKey: ["book", id],
     queryFn: () => getBook(id!),
     enabled: !!id,
+  });
+
+  // Fetch series detail for prev/next navigation
+  const primarySeries = book?.series?.[0];
+  const { data: seriesDetail } = useQuery({
+    queryKey: ["series", primarySeries?.id],
+    queryFn: () => getSeriesDetail(primarySeries!.id),
+    enabled: !!primarySeries,
   });
 
   if (isLoading) {
@@ -52,6 +79,28 @@ export default function BookDetailPage() {
   const isAudiobook = book.media_type === "audiobook";
   const mediaLabel = book.media_type === 'audiobook' ? 'Audiobook' : book.media_type === 'comic' ? 'Comic' : 'eBook';
   const mediaColor = book.media_type === 'audiobook' ? 'bg-orange-500/15 text-orange-400' : book.media_type === 'comic' ? 'bg-green-500/15 text-green-400' : 'bg-indigo-500/15 text-indigo-400';
+  const MediaIcon = isAudiobook ? Headphones : book.media_type === 'comic' ? Image : BookOpen;
+
+  // Compute authors and narrators
+  const authors = book.authors.filter((a) => a.role === "author");
+  const narrators = book.authors.filter((a) => a.role === "narrator");
+  const editors = book.authors.filter((a) => a.role === "editor");
+
+  // Series navigation
+  let prevBook: { id: string; title: string; position: number } | null = null;
+  let nextBook: { id: string; title: string; position: number } | null = null;
+  let seriesTotalBooks = 0;
+  if (seriesDetail && primarySeries) {
+    const sorted = [...seriesDetail.books].sort((a, b) => a.position - b.position);
+    seriesTotalBooks = sorted.length;
+    const currentIdx = sorted.findIndex((b) => b.id === book.id);
+    if (currentIdx > 0) prevBook = sorted[currentIdx - 1];
+    if (currentIdx >= 0 && currentIdx < sorted.length - 1) nextBook = sorted[currentIdx + 1];
+  }
+
+  // Aggregate file info
+  const totalFileSize = book.library_items.reduce((sum, item) => sum + (item.file_size ?? 0), 0);
+  const fileCount = book.library_items.length;
 
   return (
     <div className="space-y-6">
@@ -60,15 +109,53 @@ export default function BookDetailPage() {
         Back to books
       </Link>
 
+      {/* Series navigation bar */}
+      {primarySeries && (
+        <div className="flex items-center justify-between bg-gray-800/50 rounded-lg px-4 py-2.5 text-sm">
+          <div className="flex items-center gap-1.5 text-gray-400">
+            Book {primarySeries.position} of {seriesTotalBooks || '?'} in{' '}
+            <Link to={`/series/${primarySeries.id}`} className="text-indigo-400 hover:text-indigo-300 transition-colors">
+              {primarySeries.name}
+            </Link>
+          </div>
+          <div className="flex items-center gap-2">
+            {prevBook ? (
+              <Link
+                to={`/books/${prevBook.id}`}
+                className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-200 transition-colors"
+                title={prevBook.title}
+              >
+                <ChevronLeft size={14} />
+                <span className="hidden sm:inline max-w-[120px] truncate">#{prevBook.position}</span>
+              </Link>
+            ) : (
+              <span className="text-gray-600"><ChevronLeft size={14} /></span>
+            )}
+            {nextBook ? (
+              <Link
+                to={`/books/${nextBook.id}`}
+                className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-200 transition-colors"
+                title={nextBook.title}
+              >
+                <span className="hidden sm:inline max-w-[120px] truncate">#{nextBook.position}</span>
+                <ChevronRight size={14} />
+              </Link>
+            ) : (
+              <span className="text-gray-600"><ChevronRight size={14} /></span>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row gap-8">
         {/* Cover */}
-        <div className="w-full md:w-64 shrink-0">
-          <div className="aspect-[2/3] bg-gray-800 rounded-lg overflow-hidden flex items-center justify-center">
+        <div className="w-full md:w-72 shrink-0">
+          <div className="aspect-[2/3] bg-gray-800 rounded-lg overflow-hidden flex items-center justify-center shadow-lg">
             {book.cover_url ? (
               <img src={book.cover_url} alt={book.title} className="w-full h-full object-cover" />
             ) : (
               <div className="text-gray-600">
-                {isAudiobook ? <Headphones size={48} /> : <BookOpen size={48} />}
+                <MediaIcon size={64} />
               </div>
             )}
           </div>
@@ -83,95 +170,161 @@ export default function BookDetailPage() {
                 <p className="text-lg text-gray-400 mt-1">{book.subtitle}</p>
               )}
             </div>
-            <span
-              className={`shrink-0 px-2.5 py-1 rounded text-xs font-medium ${mediaColor}`}
-            >
+            <span className={`shrink-0 px-2.5 py-1 rounded text-xs font-medium ${mediaColor}`}>
               {mediaLabel}
             </span>
           </div>
 
           {/* Authors */}
-          {book.authors.length > 0 && (
+          {authors.length > 0 && (
             <p className="text-gray-300 mt-3">
-              {book.authors.map((a) => a.name).join(", ")}
+              by{' '}
+              {authors.map((a, i) => (
+                <span key={a.id}>
+                  {i > 0 && ', '}
+                  <Link to={`/authors/${a.id}`} className="hover:text-indigo-400 transition-colors">
+                    {a.name}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
+
+          {/* Narrators */}
+          {narrators.length > 0 && (
+            <p className="text-sm text-gray-400 mt-1">
+              Narrated by{' '}
+              {narrators.map((a, i) => (
+                <span key={a.id}>
+                  {i > 0 && ', '}
+                  <Link to={`/authors/${a.id}`} className="hover:text-indigo-400 transition-colors">
+                    {a.name}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
+
+          {/* Editors */}
+          {editors.length > 0 && (
+            <p className="text-sm text-gray-400 mt-1">
+              Edited by{' '}
+              {editors.map((a, i) => (
+                <span key={a.id}>
+                  {i > 0 && ', '}
+                  <Link to={`/authors/${a.id}`} className="hover:text-indigo-400 transition-colors">
+                    {a.name}
+                  </Link>
+                </span>
+              ))}
             </p>
           )}
 
           {/* Series */}
           {book.series.length > 0 && (
-            <p className="text-sm text-gray-400 mt-1">
-              {book.series.map((s) => (
-                <Link
-                  key={s.id}
-                  to={`/series/${s.id}`}
-                  className="hover:text-indigo-400 transition-colors"
-                >
-                  {s.name} #{s.position}
-                </Link>
+            <p className="text-sm text-gray-400 mt-2">
+              {book.series.map((s, i) => (
+                <span key={s.id}>
+                  {i > 0 && ' · '}
+                  <Link
+                    to={`/series/${s.id}`}
+                    className="hover:text-indigo-400 transition-colors"
+                  >
+                    {s.name} #{s.position}
+                  </Link>
+                </span>
               ))}
             </p>
           )}
 
           {/* Meta row */}
-          <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-400">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-4 text-sm text-gray-400">
             {book.publish_year && <span>{book.publish_year}</span>}
             {book.language && <span className="uppercase">{book.language}</span>}
-            {book.page_count && (
+            {book.page_count != null && book.page_count > 0 && (
               <span className="flex items-center gap-1">
                 <FileText size={14} />
                 {book.page_count} pages
               </span>
             )}
-            {book.duration_seconds && (
+            {book.duration_seconds != null && book.duration_seconds > 0 && (
               <span className="flex items-center gap-1">
                 <Clock size={14} />
                 {formatDuration(book.duration_seconds)}
               </span>
             )}
+            {book.metadata_source && (
+              <span className="text-gray-500">Source: {book.metadata_source}</span>
+            )}
           </div>
 
           {/* Description */}
           {book.description && (
-            <p className="text-gray-300 mt-6 leading-relaxed">{book.description}</p>
+            <p className="text-gray-300 mt-6 leading-relaxed whitespace-pre-line">{book.description}</p>
           )}
 
           {/* Identifiers */}
-          <div className="mt-6 space-y-1 text-sm text-gray-500">
-            {book.isbn_13 && <p>ISBN-13: {book.isbn_13}</p>}
-            {book.isbn_10 && <p>ISBN-10: {book.isbn_10}</p>}
-            {book.asin && <p>ASIN: {book.asin}</p>}
-          </div>
-
-          {/* Metadata provider link */}
-          {(book.hardcover_slug || book.openlibrary_key) && (
-            <div className="mt-4">
-              <a
-                href={
-                  book.hardcover_slug
-                    ? `https://hardcover.app/books/${book.hardcover_slug}`
-                    : `https://openlibrary.org/works/${book.openlibrary_key}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-indigo-400 transition-colors"
-              >
-                <ExternalLink size={14} />
-                View on {book.hardcover_slug ? "Hardcover" : "OpenLibrary"}
-              </a>
+          {(book.isbn_13 || book.isbn_10 || book.asin) && (
+            <div className="mt-6 space-y-1 text-sm text-gray-500">
+              {book.isbn_13 && <p>ISBN-13: <span className="text-gray-400 font-mono">{book.isbn_13}</span></p>}
+              {book.isbn_10 && <p>ISBN-10: <span className="text-gray-400 font-mono">{book.isbn_10}</span></p>}
+              {book.asin && <p>ASIN: <span className="text-gray-400 font-mono">{book.asin}</span></p>}
             </div>
           )}
 
-          {/* Library items */}
-          {book.library_items.length > 0 && (
+          {/* External links */}
+          {(book.hardcover_slug || book.openlibrary_key) && (
+            <div className="flex flex-wrap gap-3 mt-4">
+              {book.hardcover_slug && (
+                <a
+                  href={`https://hardcover.app/books/${book.hardcover_slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-indigo-400 transition-colors"
+                >
+                  <ExternalLink size={14} />
+                  Hardcover
+                </a>
+              )}
+              {book.openlibrary_key && (
+                <a
+                  href={`https://openlibrary.org/works/${book.openlibrary_key}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-indigo-400 transition-colors"
+                >
+                  <ExternalLink size={14} />
+                  OpenLibrary
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Library items / Files */}
+          {fileCount > 0 && (
             <div className="mt-6">
-              <h3 className="text-sm font-medium text-gray-300 mb-2">Files</h3>
+              <div className="flex items-center gap-2 mb-2">
+                <HardDrive size={14} className="text-gray-500" />
+                <h3 className="text-sm font-medium text-gray-300">
+                  Library Files
+                  <span className="text-gray-500 font-normal ml-2">
+                    {fileCount} {fileCount === 1 ? 'file' : 'files'}{totalFileSize > 0 ? `, ${formatBytes(totalFileSize)}` : ''}
+                  </span>
+                </h3>
+              </div>
               <div className="space-y-2">
                 {book.library_items.map((item) => (
                   <div key={item.id} className="bg-gray-800/50 rounded px-3 py-2 text-sm">
-                    <p className="text-gray-300 truncate">{item.file_path}</p>
+                    <p className="text-gray-300 truncate" title={item.file_path}>{item.file_path}</p>
                     <div className="flex gap-3 text-xs text-gray-500 mt-1">
-                      {item.file_format && <span>{item.file_format.toUpperCase()}</span>}
-                      {item.file_size && <span>{(item.file_size / 1048576).toFixed(1)} MB</span>}
+                      {item.file_format && (
+                        <span className="bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-400">
+                          {item.file_format.toUpperCase()}
+                        </span>
+                      )}
+                      {item.file_size != null && item.file_size > 0 && (
+                        <span>{formatBytes(item.file_size)}</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -179,7 +332,7 @@ export default function BookDetailPage() {
             </div>
           )}
 
-          {book.library_items.length === 0 && (
+          {fileCount === 0 && (
             <div className="mt-6 bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
               <p className="text-sm text-gray-400">Not in your library yet</p>
               <Link
@@ -191,8 +344,8 @@ export default function BookDetailPage() {
             </div>
           )}
 
-          {/* Find Releases */}
-          <div className="mt-6">
+          {/* Actions */}
+          <div className="mt-6 flex flex-wrap gap-3">
             <button
               onClick={() => setReleasesOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
