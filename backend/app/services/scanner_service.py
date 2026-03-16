@@ -27,6 +27,10 @@ async def run_scan(root_folder_id: uuid.UUID) -> None:
             logger.warning("Root folder %s not found, skipping scan", root_folder_id)
             return
 
+        if root_folder.scan_status == "scanning":
+            logger.warning("Root folder %s is already being scanned, skipping", root_folder_id)
+            return
+
         logger.info("Scanning path: %s", root_folder.path)
         scanner = FilesystemScanner()
         root_folder.scan_status = "scanning"
@@ -144,7 +148,7 @@ async def _process_item(db, root_folder: RootFolder, item: ScannedItem) -> Autho
             )
         )).scalar_one_or_none()
         if not existing_link:
-            db.add(SeriesBook(series_id=series.id, book_id=book.id))
+            db.add(SeriesBook(series_id=series.id, book_id=book.id, position=item.series_position or 0.0))
 
     lib_item = LibraryItem(
         library_id=root_folder.id,
@@ -165,7 +169,8 @@ async def _process_item(db, root_folder: RootFolder, item: ScannedItem) -> Autho
 async def _fetch_catalog_for_new_author(author_id: uuid.UUID) -> None:
     """Background task: search the configured provider for an author and fetch their catalog."""
     # Lazy import to avoid circular imports
-    from app.services.catalog_service import create_monitored_author, refresh_author_catalog
+    from app.services.catalog_service import refresh_author_catalog
+    from app.services.settings_service import get_setting
 
     try:
         async with async_session() as db:
@@ -175,8 +180,40 @@ async def _fetch_catalog_for_new_author(author_id: uuid.UUID) -> None:
                 return
 
             logger.info("Auto-cataloging new author: %s", author.name)
-            # Search the provider and set the slug/key
-            author = await create_monitored_author(db, author.name)
+
+            # Search the provider for a slug/key and set it on the existing author
+            # (Don't call create_monitored_author which could create a duplicate)
+            provider = await get_setting(db, 'search.book_provider') or 'openlibrary'
+
+            if provider == 'hardcover':
+                api_key = await get_setting(db, 'metadata.hardcover.api_key')
+                if api_key:
+                    from app.metadata.hardcover import search_author as hc_search_author
+                    hc_author = await hc_search_author(api_key, author.name)
+                    if hc_author:
+                        author.openlibrary_key = hc_author.get('slug', '')
+                        author.bio = hc_author.get('bio', '')
+                        author.photo_url = hc_author.get('image', {}).get('url', '')
+
+            if not author.openlibrary_key:
+                # Fall back to OpenLibrary search
+                import httpx
+                async with httpx.AsyncClient(timeout=15) as client:
+                    from app.services.rate_limiter import get_limiter
+                    await get_limiter('openlibrary').acquire()
+                    resp = await client.get(
+                        "https://openlibrary.org/search/authors.json",
+                        params={"q": author.name},
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        docs = data.get("docs", [])
+                        if docs:
+                            author.openlibrary_key = docs[0].get("key", "")
+
+            author.monitored = True
+            await db.commit()
+
             # Fetch full catalog
             added = await refresh_author_catalog(db, author)
             logger.info("Auto-catalog complete for %s: %d books added", author.name, added)

@@ -8,23 +8,22 @@ logger = logging.getLogger(__name__)
 
 
 class ProviderRateLimiter:
-    """Rate limiter for external API providers using a token-bucket approach."""
+    """Rate limiter for external API providers using minimum-interval enforcement."""
 
     def __init__(
         self,
         name: str,
-        max_requests_per_minute: int = 60,
         min_interval_seconds: float = 1.0,
     ) -> None:
         self.name = name
-        self.max_requests_per_minute = max_requests_per_minute
         self.min_interval_seconds = min_interval_seconds
-        self._semaphore = asyncio.Semaphore(max_requests_per_minute)
         self._last_request_time: float = 0.0
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
 
     async def acquire(self) -> None:
         """Block until a request slot is available, enforcing min interval."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
         async with self._lock:
             now = time.monotonic()
             elapsed = now - self._last_request_time
@@ -54,11 +53,11 @@ def get_limiter(provider_name: str) -> ProviderRateLimiter:
     return _limiters[provider_name]
 
 
-def _register(name: str, rpm: int, interval: float) -> None:
-    _limiters[name] = ProviderRateLimiter(name, max_requests_per_minute=rpm, min_interval_seconds=interval)
+def _register(name: str, interval: float) -> None:
+    _limiters[name] = ProviderRateLimiter(name, min_interval_seconds=interval)
 
 
 # Pre-register known providers
-_register("hardcover", rpm=60, interval=1.0)
-_register("openlibrary", rpm=100, interval=0.5)
-_register("google_books", rpm=100, interval=0.5)
+_register("hardcover", interval=1.0)
+_register("openlibrary", interval=0.5)
+_register("google_books", interval=0.5)
