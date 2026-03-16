@@ -14,14 +14,16 @@ class PathContext:
     edition: str = ''
     original_name: str = ''
 
-# Conditional syntax: {Series?content_if_present}
 # Token syntax: {TokenName} or {TokenName:30} for truncation
-CONDITIONAL_RE = re.compile(r'\{(\w+)\?([^}]*)\}')
 TOKEN_RE = re.compile(r'\{(\w[\w ]*?)(?::(-?\d+))?\}')
 
 def _sanitize_filename(name: str) -> str:
     # Remove characters invalid in file paths
-    return re.sub(r'[<>:"/\|?*]', '', name).strip().rstrip('.')
+    name = re.sub(r'[<>:"/\\|?*]', '', name).strip()
+    # Strip trailing dots but preserve truncation ellipsis
+    if not name.endswith('...'):
+        name = name.rstrip('.')
+    return name
 
 def _resolve_token(name: str, ctx: PathContext) -> str:
     mapping = {
@@ -45,20 +47,46 @@ def _sort_name(name: str) -> str:
         return f'{parts[1]}, {parts[0]}'
     return name
 
+def _process_conditionals(template: str, ctx: PathContext) -> str:
+    """Parse {Token?content} with balanced braces so content can contain {Token} refs."""
+    result = []
+    i = 0
+    while i < len(template):
+        if template[i] == '{':
+            # Check if this is a conditional: {Word?
+            m = re.match(r'\{(\w+)\?', template[i:])
+            if m:
+                token_name = m.group(1)
+                # Find the matching closing brace with brace counting
+                start = i + len(m.group(0))
+                depth = 1
+                j = start
+                while j < len(template) and depth > 0:
+                    if template[j] == '{':
+                        depth += 1
+                    elif template[j] == '}':
+                        depth -= 1
+                    j += 1
+                content = template[start:j - 1]
+                value = _resolve_token(token_name, ctx)
+                if value:
+                    content = TOKEN_RE.sub(
+                        lambda tm: _truncate(_resolve_token(tm.group(1), ctx), tm.group(2)),
+                        content,
+                    )
+                    result.append(content)
+                i = j
+                continue
+        result.append(template[i])
+        i += 1
+    return ''.join(result)
+
 def render_path(template: str, ctx: PathContext) -> str:
     result = template
 
     # Process conditionals first: {Series?{Series}/}
-    def replace_conditional(m):
-        token_name = m.group(1)
-        content = m.group(2)
-        value = _resolve_token(token_name, ctx)
-        if value:
-            # Resolve any tokens inside the conditional content
-            return TOKEN_RE.sub(lambda tm: _truncate(_resolve_token(tm.group(1), ctx), tm.group(2)), content)
-        return ''
-
-    result = CONDITIONAL_RE.sub(replace_conditional, result)
+    # Uses a balanced-brace parser to handle nested {Token} refs inside conditionals
+    result = _process_conditionals(result, ctx)
 
     # Process remaining tokens
     def replace_token(m):
