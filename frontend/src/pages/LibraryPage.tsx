@@ -1,11 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { getBooks } from "@/api/client";
+import { getBooks, toggleBookMonitored } from "@/api/client";
 import type { BookListItem } from "@/api/client";
-import { BookOpen, ChevronLeft, ChevronRight, Settings as SettingsIcon, ArrowUpDown } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Settings as SettingsIcon, ArrowUpDown, Eye, EyeOff, Trash2 } from "lucide-react";
 import BookGrid from "@/components/library/BookGrid";
 import SearchBar from "@/components/library/SearchBar";
+import BulkActionBar from "@/components/BulkActionBar";
+import type { BulkAction } from "@/components/BulkActionBar";
+import { useToast } from "@/contexts/ToastContext";
 
 type SortOption = "title" | "author" | "date";
 
@@ -19,7 +22,10 @@ export default function LibraryPage({ initialMediaType = "", title = "Library" }
   const [mediaType, setMediaType] = useState(initialMediaType);
   const [sortBy, setSortBy] = useState<SortOption>("title");
   const [page, setPage] = useState(1);
+  const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
   const perPage = 24;
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
 
   const { data, isLoading } = useQuery({
     queryKey: ["books", search, mediaType, page],
@@ -53,6 +59,34 @@ export default function LibraryPage({ initialMediaType = "", title = "Library" }
       }
     });
   }, [data?.items, sortBy]);
+
+  const toggleSelected = useCallback((bookId: string) => {
+    setSelectedBookIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(bookId)) next.delete(bookId);
+      else next.add(bookId);
+      return next;
+    });
+  }, []);
+
+  const bulkMonitor = useCallback(async (monitored: boolean) => {
+    try {
+      await Promise.all(
+        Array.from(selectedBookIds).map((bookId) => toggleBookMonitored(bookId, monitored))
+      );
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      addToast(monitored ? "Books set to monitored" : "Books set to unmonitored", "info");
+      setSelectedBookIds(new Set());
+    } catch {
+      addToast("Failed to update some books", "error");
+    }
+  }, [selectedBookIds, queryClient, addToast]);
+
+  const bulkActions: BulkAction[] = [
+    { label: "Monitor Selected", icon: Eye, onClick: () => bulkMonitor(true) },
+    { label: "Unmonitor Selected", icon: EyeOff, onClick: () => bulkMonitor(false) },
+    { label: "Delete Selected", icon: Trash2, onClick: () => addToast("Delete not yet implemented", "info"), variant: "danger" },
+  ];
 
   // Empty library state
   if (!isLoading && data?.total === 0 && !search && !mediaType) {
@@ -116,6 +150,8 @@ export default function LibraryPage({ initialMediaType = "", title = "Library" }
       <BookGrid
         books={sortedBooks}
         isLoading={isLoading}
+        selectedBookIds={selectedBookIds}
+        onToggleSelected={toggleSelected}
       />
 
       {/* Pagination */}
@@ -140,6 +176,15 @@ export default function LibraryPage({ initialMediaType = "", title = "Library" }
           </button>
         </div>
       )}
+
+      <BulkActionBar
+        selectedCount={selectedBookIds.size}
+        onClearSelection={() => setSelectedBookIds(new Set())}
+        actions={bulkActions}
+      />
+
+      {/* Bottom padding when bulk bar is visible */}
+      {selectedBookIds.size > 0 && <div className="h-16" />}
     </div>
   );
 }

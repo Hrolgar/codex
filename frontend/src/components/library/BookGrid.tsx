@@ -5,9 +5,11 @@ import BookCard from "./BookCard";
 interface BookGridProps {
   books: BookListItem[];
   isLoading?: boolean;
+  selectedBookIds?: Set<string>;
+  onToggleSelected?: (bookId: string) => void;
 }
 
-export default function BookGrid({ books, isLoading }: BookGridProps) {
+export default function BookGrid({ books, isLoading, selectedBookIds, onToggleSelected }: BookGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -42,7 +44,19 @@ export default function BookGrid({ books, isLoading }: BookGridProps) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
       {books.map((book) => (
-        <BookCard key={book.id} book={book} />
+        <div key={book.id} className="relative">
+          {onToggleSelected && (
+            <label className="absolute top-2 left-2 z-10 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={selectedBookIds?.has(book.id) ?? false}
+                onChange={() => onToggleSelected(book.id)}
+                className="w-4 h-4 rounded border-gray-600 bg-gray-800/80 text-indigo-500 focus:ring-indigo-500/30"
+              />
+            </label>
+          )}
+          <BookCard book={book} />
+        </div>
       ))}
     </div>
   );

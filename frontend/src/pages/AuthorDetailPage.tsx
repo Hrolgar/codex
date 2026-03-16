@@ -1,11 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAuthor, refreshAuthor, deleteAuthor, getSeriesDetail } from "@/api/client";
+import { getAuthor, refreshAuthor, deleteAuthor, getSeriesDetail, toggleBookMonitored } from "@/api/client";
 import type { AuthorMediaGroup } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import AuthorBookRow from "@/components/AuthorBookRow";
 import FindReleasesModal from "@/components/FindReleasesModal";
+import BulkActionBar from "@/components/BulkActionBar";
+import type { BulkAction } from "@/components/BulkActionBar";
 import {
   ArrowLeft,
   BookOpen,
@@ -18,6 +20,7 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  Search,
 } from "lucide-react";
 
 const MEDIA_LABELS: Record<string, string> = {
@@ -35,6 +38,7 @@ export default function AuthorDetailPage() {
   const [findRelease, setFindRelease] = useState<{ title: string; author: string; mediaType: string } | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("");
+  const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
 
   const { data: author, isLoading, error } = useQuery({
     queryKey: ["author", id],
@@ -63,6 +67,34 @@ export default function AuthorDetailPage() {
       navigate("/");
     },
   });
+
+  const toggleSelected = useCallback((bookId: string) => {
+    setSelectedBookIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(bookId)) next.delete(bookId);
+      else next.add(bookId);
+      return next;
+    });
+  }, []);
+
+  const bulkMonitor = useCallback(async (monitored: boolean) => {
+    try {
+      await Promise.all(
+        Array.from(selectedBookIds).map((bookId) => toggleBookMonitored(bookId, monitored))
+      );
+      queryClient.invalidateQueries({ queryKey: ["author", id] });
+      addToast(monitored ? "Books set to monitored" : "Books set to unmonitored", "info");
+      setSelectedBookIds(new Set());
+    } catch {
+      addToast("Failed to update some books", "error");
+    }
+  }, [selectedBookIds, queryClient, id, addToast]);
+
+  const bulkActions: BulkAction[] = [
+    { label: "Monitor Selected", icon: Eye, onClick: () => bulkMonitor(true) },
+    { label: "Unmonitor Selected", icon: EyeOff, onClick: () => bulkMonitor(false) },
+    { label: "Find Releases", icon: Search, onClick: () => addToast("Use individual search for now", "info") },
+  ];
 
   const groups: AuthorMediaGroup[] = useMemo(() => {
     if (!author) return [];
@@ -265,7 +297,19 @@ export default function AuthorDetailPage() {
       {activeGroup && activeGroup.books.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
           {activeGroup.books.map((book: any) => (
-            <AuthorBookRow key={book.id} book={book} authorName={author.name} onSearch={handleSearch} />
+            <div key={book.id} className="flex items-center">
+              <label className="flex items-center pl-3 shrink-0 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedBookIds.has(book.id)}
+                  onChange={() => toggleSelected(book.id)}
+                  className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-500/30"
+                />
+              </label>
+              <div className="flex-1 min-w-0">
+                <AuthorBookRow book={book} authorName={author.name} onSearch={handleSearch} />
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -281,6 +325,8 @@ export default function AuthorDetailPage() {
           authorName={author.name}
           mediaType={currentTab}
           onSearch={handleSearch}
+          selectedBookIds={selectedBookIds}
+          onToggleSelected={toggleSelected}
         />
       ))}
 
@@ -312,6 +358,15 @@ export default function AuthorDetailPage() {
           mediaType={findRelease.mediaType}
         />
       )}
+
+      <BulkActionBar
+        selectedCount={selectedBookIds.size}
+        onClearSelection={() => setSelectedBookIds(new Set())}
+        actions={bulkActions}
+      />
+
+      {/* Bottom padding when bulk bar is visible */}
+      {selectedBookIds.size > 0 && <div className="h-16" />}
     </div>
   );
 }
@@ -324,6 +379,8 @@ function SeriesSection({
   authorName,
   mediaType,
   onSearch,
+  selectedBookIds,
+  onToggleSelected,
 }: {
   seriesId: string;
   seriesName: string;
@@ -332,6 +389,8 @@ function SeriesSection({
   authorName: string;
   mediaType: string;
   onSearch: (title: string, author: string, mediaType: string) => void;
+  selectedBookIds: Set<string>;
+  onToggleSelected: (bookId: string) => void;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["series", seriesId],
@@ -366,12 +425,23 @@ function SeriesSection({
       </div>
       <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
         {books.map((book) => (
-          <AuthorBookRow
-            key={book.id}
-            book={{ ...book, owned: book.owned ?? false, monitored: true, media_type: book.media_type || mediaType }}
-            authorName={authorName}
-            onSearch={onSearch}
-          />
+          <div key={book.id} className="flex items-center">
+            <label className="flex items-center pl-3 shrink-0 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedBookIds.has(book.id)}
+                onChange={() => onToggleSelected(book.id)}
+                className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-500/30"
+              />
+            </label>
+            <div className="flex-1 min-w-0">
+              <AuthorBookRow
+                book={{ ...book, owned: book.owned ?? false, monitored: true, media_type: book.media_type || mediaType }}
+                authorName={authorName}
+                onSearch={onSearch}
+              />
+            </div>
+          </div>
         ))}
       </div>
     </section>
