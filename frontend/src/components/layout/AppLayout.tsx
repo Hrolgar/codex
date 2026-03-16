@@ -2,11 +2,12 @@ import { ReactNode, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getNotifications } from "@/api/client";
-import { Home, User, BookOpen as BookIcon, Search, Download, Star, Settings, Menu, X, BookOpen, Bell, Layers } from "lucide-react";
+import { Home, User, BookOpen as BookIcon, Search, Download, Star, Settings, Menu, X, BookOpen, Bell, Layers, Library } from "lucide-react";
 
 const navItems = [
   { to: "/", icon: Home, label: "Dashboard" },
   { to: "/authors", icon: User, label: "Authors" },
+  { to: "/series", icon: Library, label: "Series" },
   { to: "/books", icon: BookIcon, label: "Library" },
   { to: "/comics", icon: Layers, label: "Comics" },
   { to: "/search", icon: Search, label: "Search" },
@@ -58,7 +59,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <NavLink
               key={to}
               to={to}
-              end={to === "/" || to === "/authors" || to === "/books"}
+              end={to === "/" || to === "/authors" || to === "/books" || to === "/series"}
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${

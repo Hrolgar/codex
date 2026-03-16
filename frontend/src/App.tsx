@@ -3,6 +3,7 @@ import AppLayout from "./components/layout/AppLayout";
 import AuthorsPage from "./pages/AuthorsPage";
 import DashboardPage from "./pages/DashboardPage";
 import AuthorDetailPage from "./pages/AuthorDetailPage";
+import SeriesPage from "./pages/SeriesPage";
 import SeriesDetailPage from "./pages/SeriesDetailPage";
 import LibraryPage from "./pages/LibraryPage";
 import BookDetailPage from "./pages/BookDetailPage";
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/authors" element={<AuthorsPage />} />
         <Route path="/authors/:id" element={<AuthorDetailPage />} />
+        <Route path="/series" element={<SeriesPage />} />
         <Route path="/series/:id" element={<SeriesDetailPage />} />
         <Route path="/books" element={<LibraryPage />} />
         <Route path="/comics" element={<LibraryPage initialMediaType="comic" title="Comics" />} />

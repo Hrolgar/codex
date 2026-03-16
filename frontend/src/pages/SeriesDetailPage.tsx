@@ -67,12 +67,8 @@ export default function SeriesDetailPage() {
   const pct = totalCount > 0 ? Math.round((ownedCount / totalCount) * 100) : 0;
   const missingBooks = sortedBooks.filter((b) => !b.owned);
 
-  const backTo = series.authors.length > 0
-    ? `/authors/${series.authors[0].id}`
-    : "/";
-  const backLabel = series.authors.length > 0
-    ? series.authors[0].name
-    : "Authors";
+  const backTo = "/series";
+  const backLabel = "Series";
 
   const authorName = series.authors.map((a) => a.name).join(", ");
 
