@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import AuthorsPage from "./pages/AuthorsPage";
+import DashboardPage from "./pages/DashboardPage";
 import AuthorDetailPage from "./pages/AuthorDetailPage";
 import SeriesDetailPage from "./pages/SeriesDetailPage";
 import LibraryPage from "./pages/LibraryPage";
@@ -15,7 +16,8 @@ export default function App() {
   return (
     <AppLayout>
       <Routes>
-        <Route path="/" element={<AuthorsPage />} />
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/authors" element={<AuthorsPage />} />
         <Route path="/authors/:id" element={<AuthorDetailPage />} />
         <Route path="/series/:id" element={<SeriesDetailPage />} />
         <Route path="/books" element={<LibraryPage />} />
