@@ -421,13 +421,15 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
 
     if added > 0:
         try:
-            from app.services.notification_service import notify
-            await notify(
-                db,
-                title="Catalog Refresh",
-                message=f"Catalog refresh: {added} new books for {author.name}",
-                notification_type="info",
-            )
+            pref = await get_setting(db, "notifications.on_catalog_refresh")
+            if pref != "false":
+                from app.services.notification_service import notify
+                await notify(
+                    db,
+                    title="Catalog Refresh",
+                    message=f"Catalog refresh: {added} new books for {author.name}",
+                    notification_type="info",
+                )
         except Exception:
             logger.warning("Failed to send catalog notification")
 
@@ -640,13 +642,15 @@ async def _refresh_via_openlibrary(db: AsyncSession, author: Author) -> int:
 
     if added > 0:
         try:
-            from app.services.notification_service import notify
-            await notify(
-                db,
-                title="Catalog Refresh",
-                message=f"Catalog refresh: {added} new books for {author.name}",
-                notification_type="info",
-            )
+            pref = await get_setting(db, "notifications.on_catalog_refresh")
+            if pref != "false":
+                from app.services.notification_service import notify
+                await notify(
+                    db,
+                    title="Catalog Refresh",
+                    message=f"Catalog refresh: {added} new books for {author.name}",
+                    notification_type="info",
+                )
         except Exception:
             logger.warning("Failed to send catalog notification")
 

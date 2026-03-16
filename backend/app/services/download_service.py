@@ -414,10 +414,12 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
                 await _broadcast_progress(dl)
                 logger.info("Torrent sent to qBittorrent: %s", dl.id)
                 try:
-                    from app.services.notification_service import notify
-                    book = await db.get(Book, dl.book_id) if dl.book_id else None
-                    dl_title = book.title if book else "torrent download"
-                    await notify(db, title="Download Complete", message=f"Download complete: {dl_title}", notification_type="success")
+                    pref = await get_setting(db, "notifications.on_download_complete")
+                    if pref != "false":
+                        from app.services.notification_service import notify
+                        book = await db.get(Book, dl.book_id) if dl.book_id else None
+                        dl_title = book.title if book else "torrent download"
+                        await notify(db, title="Download Complete", message=f"Download complete: {dl_title}", notification_type="success")
                 except Exception:
                     logger.warning("Failed to send download notification")
                 return
@@ -449,9 +451,11 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
                 await _broadcast_progress(dl)
                 logger.info("NZB sent to SABnzbd: %s", dl.id)
                 try:
-                    from app.services.notification_service import notify
-                    dl_title = book.title if book else "NZB download"
-                    await notify(db, title="Download Complete", message=f"Download complete: {dl_title}", notification_type="success")
+                    pref = await get_setting(db, "notifications.on_download_complete")
+                    if pref != "false":
+                        from app.services.notification_service import notify
+                        dl_title = book.title if book else "NZB download"
+                        await notify(db, title="Download Complete", message=f"Download complete: {dl_title}", notification_type="success")
                 except Exception:
                     logger.warning("Failed to send download notification")
                 return
@@ -526,15 +530,17 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
 
         # Send notification for completed download
         try:
-            from app.services.notification_service import notify
-            book = await db.get(Book, dl.book_id) if dl.book_id else None
-            dl_title = book.title if book else organized_path.name
-            await notify(
-                db,
-                title="Download Complete",
-                message=f"Download complete: {dl_title}",
-                notification_type="success",
-            )
+            pref = await get_setting(db, "notifications.on_download_complete")
+            if pref != "false":
+                from app.services.notification_service import notify
+                book = await db.get(Book, dl.book_id) if dl.book_id else None
+                dl_title = book.title if book else organized_path.name
+                await notify(
+                    db,
+                    title="Download Complete",
+                    message=f"Download complete: {dl_title}",
+                    notification_type="success",
+                )
         except Exception:
             logger.warning("Failed to send download notification")
 

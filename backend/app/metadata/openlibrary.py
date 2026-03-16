@@ -1,7 +1,12 @@
+import asyncio
+import logging
+
 import httpx
 
 from app.metadata.base import MetadataResult
 from app.services.rate_limiter import get_limiter
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://openlibrary.org"
 COVERS_BASE_URL = "https://covers.openlibrary.org"
@@ -20,11 +25,24 @@ class OpenLibraryProvider:
         if author:
             params["author"] = author
 
-        await get_limiter('openlibrary').acquire()
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(f"{BASE_URL}/search.json", params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        limiter = get_limiter('openlibrary')
+        await limiter.acquire()
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(f"{BASE_URL}/search.json", params=params)
+                if resp.status_code == 429:
+                    logger.warning("OpenLibrary: rate limited (429), retrying after %.1fs", limiter.min_interval_seconds)
+                    await asyncio.sleep(limiter.min_interval_seconds)
+                    await limiter.acquire()
+                    resp = await client.get(f"{BASE_URL}/search.json", params=params)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.TimeoutException:
+            logger.warning("OpenLibrary: search request timed out")
+            return []
+        except httpx.HTTPStatusError as exc:
+            logger.warning("OpenLibrary: search HTTP %d error", exc.response.status_code)
+            return []
 
         results = []
         for doc in data.get("docs", []):
@@ -47,23 +65,39 @@ class OpenLibraryProvider:
         return results
 
     async def lookup_isbn(self, isbn: str) -> MetadataResult | None:
-        await get_limiter('openlibrary').acquire()
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(f"{BASE_URL}/isbn/{isbn}.json")
-            if resp.status_code == 404:
-                return None
-            resp.raise_for_status()
-            data = resp.json()
+        limiter = get_limiter('openlibrary')
+        await limiter.acquire()
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(f"{BASE_URL}/isbn/{isbn}.json")
+                if resp.status_code == 404:
+                    return None
+                if resp.status_code == 429:
+                    logger.warning("OpenLibrary: rate limited (429), retrying after %.1fs", limiter.min_interval_seconds)
+                    await asyncio.sleep(limiter.min_interval_seconds)
+                    await limiter.acquire()
+                    resp = await client.get(f"{BASE_URL}/isbn/{isbn}.json")
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.TimeoutException:
+            logger.warning("OpenLibrary: ISBN lookup timed out for %s", isbn)
+            return None
+        except httpx.HTTPStatusError as exc:
+            logger.warning("OpenLibrary: ISBN lookup HTTP %d error for %s", exc.response.status_code, isbn)
+            return None
 
         authors = []
         for author_ref in data.get("authors", []):
             key = author_ref.get("key")
             if key:
-                await get_limiter('openlibrary').acquire()
-                async with httpx.AsyncClient(timeout=10) as client:
-                    a_resp = await client.get(f"{BASE_URL}{key}.json")
-                    if a_resp.status_code == 200:
-                        authors.append(a_resp.json().get("name", ""))
+                await limiter.acquire()
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        a_resp = await client.get(f"{BASE_URL}{key}.json")
+                        if a_resp.status_code == 200:
+                            authors.append(a_resp.json().get("name", ""))
+                except (httpx.TimeoutException, httpx.HTTPStatusError):
+                    logger.warning("OpenLibrary: author fetch failed for %s", key)
 
         isbn_10 = None
         isbn_13 = None

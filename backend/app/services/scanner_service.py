@@ -50,13 +50,16 @@ async def run_scan(root_folder_id: uuid.UUID) -> None:
             logger.info("Scan complete for %s: %d items found", root_folder.path, items_found)
             if items_found > 0:
                 try:
-                    from app.services.notification_service import notify
-                    await notify(
-                        db,
-                        title="Scan Complete",
-                        message=f"Scan complete: {items_found} new files in {root_folder.name}",
-                        notification_type="success",
-                    )
+                    from app.services.settings_service import get_setting
+                    pref = await get_setting(db, "notifications.on_scan_complete")
+                    if pref != "false":
+                        from app.services.notification_service import notify
+                        await notify(
+                            db,
+                            title="Scan Complete",
+                            message=f"Scan complete: {items_found} new files in {root_folder.name}",
+                            notification_type="success",
+                        )
                 except Exception:
                     logger.warning("Failed to send scan notification")
         except Exception:

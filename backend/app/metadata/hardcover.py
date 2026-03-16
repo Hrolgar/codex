@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -55,11 +56,25 @@ async def _query(api_key: str, query: str, variables: dict | None = None) -> dic
     body = {'query': query}
     if variables:
         body['variables'] = variables
-    await get_limiter('hardcover').acquire()
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.post(HARDCOVER_URL, json=body, headers=headers)
-        resp.raise_for_status()
-        return resp.json()
+
+    limiter = get_limiter('hardcover')
+    await limiter.acquire()
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(HARDCOVER_URL, json=body, headers=headers)
+            if resp.status_code == 429:
+                logger.warning("Hardcover: rate limited (429), retrying after %.1fs", limiter.min_interval_seconds)
+                await asyncio.sleep(limiter.min_interval_seconds)
+                await limiter.acquire()
+                resp = await client.post(HARDCOVER_URL, json=body, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.TimeoutException:
+        logger.warning("Hardcover: request timed out")
+        return {}
+    except httpx.HTTPStatusError as exc:
+        logger.warning("Hardcover: HTTP %d error", exc.response.status_code)
+        return {}
 
 
 # ---------------------------------------------------------------------------

@@ -101,6 +101,10 @@ SETTINGS_SCHEMA: dict[str, tuple[str, str, str, bool]] = {
 
     # Notifications
     "notifications.discord_webhook_url": ("Discord Webhook URL", "Discord webhook URL for sending notifications", "notifications", False),
+    "notifications.on_scan_complete": ("On Scan Complete", "Send notification when a library scan finishes", "notifications", False),
+    "notifications.on_download_complete": ("On Download Complete", "Send notification when a download finishes", "notifications", False),
+    "notifications.on_new_books": ("On New Books", "Send notification when new books are added", "notifications", False),
+    "notifications.on_catalog_refresh": ("On Catalog Refresh", "Send notification when a catalog refresh completes", "notifications", False),
 }
 
 # Default values for settings that should have non-empty defaults.
@@ -171,6 +175,11 @@ SETTINGS_DEFAULTS: dict[str, str] = {
     "search.default_source": "prowlarr",
     # Scan
     "scan.interval_hours": "24",
+    # Notifications
+    "notifications.on_scan_complete": "true",
+    "notifications.on_download_complete": "true",
+    "notifications.on_new_books": "true",
+    "notifications.on_catalog_refresh": "true",
 }
 
 
