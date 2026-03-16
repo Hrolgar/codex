@@ -70,8 +70,19 @@ async def _book_exists(db: AsyncSession, title: str, author_name: str) -> bool:
 
 @router.post("/import/calibre", tags=["import"])
 async def import_calibre(body: CalibreImportRequest, db: AsyncSession = Depends(get_db)):
-    library_path = Path(body.path)
+    library_path = Path(body.path).resolve()
     db_path = library_path / "metadata.db"
+
+    # Security: only allow reading from paths under known root folders
+    from app.models.root_folder import RootFolder
+    result = await db.execute(select(RootFolder))
+    root_folders = result.scalars().all()
+    allowed_roots = [Path(rf.path).resolve() for rf in root_folders]
+    if not any(library_path == root or root in library_path.parents for root in allowed_roots):
+        raise HTTPException(
+            status_code=403,
+            detail="Calibre library path must be under a configured root folder",
+        )
 
     if not db_path.is_file():
         raise HTTPException(status_code=400, detail=f"metadata.db not found at {db_path}")
@@ -114,6 +125,13 @@ async def import_calibre(body: CalibreImportRequest, db: AsyncSession = Depends(
             )
     finally:
         conn.close()
+
+    # Find the root folder that contains this library path
+    containing_folder = None
+    for rf in root_folders:
+        if library_path == Path(rf.path).resolve() or Path(rf.path).resolve() in library_path.parents:
+            containing_folder = rf
+            break
 
     imported = 0
     skipped = 0
@@ -165,6 +183,7 @@ async def import_calibre(body: CalibreImportRequest, db: AsyncSession = Depends(
             file_path = str(library_path / book_dir / f"{file_name}.{fmt}")
             if os.path.isfile(file_path):
                 db.add(LibraryItem(
+                    library_id=containing_folder.id if containing_folder else root_folders[0].id,
                     book_id=book.id,
                     file_path=file_path,
                     file_format=fmt,
@@ -184,6 +203,11 @@ async def import_calibre(body: CalibreImportRequest, db: AsyncSession = Depends(
 
 @router.post("/import/audiobookshelf", tags=["import"])
 async def import_audiobookshelf(body: AudiobookshelfImportRequest, db: AsyncSession = Depends(get_db)):
+    from urllib.parse import urlparse
+    parsed = urlparse(body.url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="URL must use http or https")
+
     headers = {"Authorization": f"Bearer {body.api_key}"}
     base = body.url.rstrip("/")
 

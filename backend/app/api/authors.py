@@ -339,6 +339,10 @@ async def toggle_author_monitored(
     return {"id": str(author.id), "monitored": author.monitored}
 
 
+# Hold references to background tasks to prevent GC
+_background_tasks: set[asyncio.Task] = set()
+
+
 @router.post("", response_model=AuthorDetail)
 async def create_monitored_author(
     body: AuthorCreate,
@@ -375,7 +379,9 @@ async def create_monitored_author(
                     a.catalog_status = "error"
                     await bg_db.commit()
 
-        asyncio.create_task(_refresh_catalog(author.id))
+        task = asyncio.create_task(_refresh_catalog(author.id))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
     # Return full author detail (no books yet — they load in background)
     return AuthorDetail(
@@ -421,12 +427,10 @@ async def refresh_author(
                 a.catalog_status = "error"
                 await bg_db.commit()
 
-    asyncio.create_task(_refresh(author_id))
+    task = asyncio.create_task(_refresh(author_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return {"status": "refreshing", "author_id": str(author_id)}
-
-
-# Hold references to background tasks to prevent GC
-_background_tasks: set[asyncio.Task] = set()
 
 
 @router.post("/{author_id}/download-missing")
