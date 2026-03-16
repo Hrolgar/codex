@@ -13,6 +13,7 @@ class DownloadCreate(BaseModel):
     book_id: uuid.UUID | None = None
     filename: str | None = None
     root_folder_id: uuid.UUID | None = None
+    is_upgrade: bool = False
 
 
 class DownloadResponse(BaseModel):
@@ -27,6 +28,7 @@ class DownloadResponse(BaseModel):
     error: str | None
     target_path: str | None
     root_folder_id: uuid.UUID | None = None
+    is_upgrade: bool = False
     created_at: datetime
     updated_at: datetime
 

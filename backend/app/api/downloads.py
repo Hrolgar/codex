@@ -30,6 +30,7 @@ async def enqueue_download(body: DownloadCreate, db: AsyncSession = Depends(get_
         book_id=body.book_id,
         target_filename=body.filename,
         root_folder_id=body.root_folder_id,
+        is_upgrade=body.is_upgrade,
     )
     return DownloadResponse.model_validate(dl)
 

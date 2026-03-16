@@ -111,7 +111,17 @@ class DownloadService:
         book_id: uuid.UUID | None = None,
         target_filename: str | None = None,
         root_folder_id: uuid.UUID | None = None,
+        is_upgrade: bool = False,
     ) -> Download:
+        # Auto-detect upgrade: check if book already has a LibraryItem
+        if book_id and not is_upgrade:
+            existing = await self.db.execute(
+                select(LibraryItem).where(LibraryItem.book_id == book_id).limit(1)
+            )
+            if existing.scalar_one_or_none() is not None:
+                is_upgrade = True
+                logger.info("Book %s already in library, flagging download as upgrade", book_id)
+
         dl = Download(
             source_type=source_type,
             source_url=source_url,
@@ -120,6 +130,7 @@ class DownloadService:
             progress=0.0,
             target_path=target_filename,
             root_folder_id=root_folder_id,
+            is_upgrade=is_upgrade,
         )
         self.db.add(dl)
         await self.db.commit()
@@ -269,8 +280,40 @@ async def _get_media_settings(db: AsyncSession, media_type: str, root_folder_id:
 async def _create_library_item(
     db: AsyncSession, dl: Download, file_path: str,
 ) -> None:
-    """Auto-create a LibraryItem after a download is organized."""
+    """Auto-create a LibraryItem after a download is organized.
+
+    If the download is flagged as an upgrade, removes old LibraryItem(s)
+    and their files before creating the new one.
+    """
     from app.models.root_folder import RootFolder
+
+    # Handle upgrade: remove old LibraryItems for this book
+    if dl.is_upgrade and dl.book_id:
+        old_items_result = await db.execute(
+            select(LibraryItem).where(LibraryItem.book_id == dl.book_id)
+        )
+        old_items = old_items_result.scalars().all()
+        for old_item in old_items:
+            # Delete the old file if it still exists
+            old_path = Path(old_item.file_path)
+            if old_path.exists():
+                try:
+                    old_path.unlink()
+                    logger.info(
+                        "Upgrade: deleted old file %s for book %s",
+                        old_item.file_path, dl.book_id,
+                    )
+                except OSError:
+                    logger.warning(
+                        "Upgrade: failed to delete old file %s",
+                        old_item.file_path, exc_info=True,
+                    )
+            await db.delete(old_item)
+        if old_items:
+            logger.info(
+                "Upgrade: removed %d old LibraryItem(s) for book %s",
+                len(old_items), dl.book_id,
+            )
 
     root_folder_id = dl.root_folder_id
     if not root_folder_id:
@@ -489,6 +532,7 @@ async def _broadcast_progress(dl: Download) -> None:
         "status": dl.status,
         "progress": dl.progress,
         "error": dl.error,
+        "is_upgrade": dl.is_upgrade,
     })
 
 
