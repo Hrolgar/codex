@@ -425,6 +425,99 @@ async def refresh_author(
     return {"status": "refreshing", "author_id": str(author_id)}
 
 
+# Hold references to background tasks to prevent GC
+_background_tasks: set[asyncio.Task] = set()
+
+
+@router.post("/{author_id}/download-missing")
+async def download_missing_books(
+    author_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Search and auto-download all missing books for an author.
+    Runs as a background task since it may take a while."""
+    author = await db.get(Author, author_id)
+    if not author:
+        raise HTTPException(status_code=404, detail="Author not found")
+
+    # Find monitored books by this author that have NO LibraryItems
+    missing_stmt = (
+        select(Book)
+        .join(BookAuthor, Book.id == BookAuthor.book_id)
+        .outerjoin(LibraryItem, LibraryItem.book_id == Book.id)
+        .where(
+            BookAuthor.author_id == author_id,
+            Book.monitored.is_(True),
+        )
+        .group_by(Book.id)
+        .having(func.count(LibraryItem.id) == 0)
+    )
+    result = await db.execute(missing_stmt)
+    missing_books = list(result.scalars().all())
+
+    if not missing_books:
+        return {"queued": 0, "skipped": 0, "status": "no_missing_books"}
+
+    # Collect book info before background task (session won't be available later)
+    books_info = [
+        {"id": b.id, "title": b.title, "media_type": b.media_type}
+        for b in missing_books
+    ]
+    author_name = author.name
+
+    async def _download_missing(books_info: list[dict], author_name: str):
+        from app.services.search_service import SearchService
+        from app.services.download_service import DownloadService
+
+        queued = 0
+        skipped = 0
+        async with async_session() as bg_db:
+            search_svc = SearchService(bg_db)
+            for info in books_info:
+                try:
+                    query = f"{info['title']} {author_name}"
+                    results = await search_svc.search(query, media_type=info["media_type"])
+                    # Filter out already-owned results
+                    available = [r for r in results if not r.owned and r.download_url]
+                    if available:
+                        best = available[0]
+                        dl_svc = DownloadService(bg_db)
+                        await dl_svc.enqueue(
+                            source_url=best.download_url,
+                            source_type=best.source or best.protocol or "http",
+                            book_id=info["id"],
+                        )
+                        queued += 1
+                        logger.info(
+                            "Queued download for '%s' by %s", info["title"], author_name
+                        )
+                    else:
+                        skipped += 1
+                        logger.debug(
+                            "No results for '%s' by %s", info["title"], author_name
+                        )
+                except Exception:
+                    skipped += 1
+                    logger.warning(
+                        "Failed to search/download '%s'", info["title"], exc_info=True
+                    )
+        logger.info(
+            "Download-missing complete for %s: queued=%d skipped=%d",
+            author_name, queued, skipped,
+        )
+
+    task = asyncio.create_task(_download_missing(books_info, author_name))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return {
+        "queued": 0,
+        "skipped": 0,
+        "total_missing": len(books_info),
+        "status": "searching",
+    }
+
+
 @router.delete("/{author_id}")
 async def delete_monitored_author(
     author_id: uuid.UUID,
