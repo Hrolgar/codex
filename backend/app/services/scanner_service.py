@@ -48,6 +48,17 @@ async def run_scan(root_folder_id: uuid.UUID) -> None:
                     new_author_ids.add(new_author.id)
             root_folder.scan_status = "idle"
             logger.info("Scan complete for %s: %d items found", root_folder.path, items_found)
+            if items_found > 0:
+                try:
+                    from app.services.notification_service import notify
+                    await notify(
+                        db,
+                        title="Scan Complete",
+                        message=f"Scan complete: {items_found} new files in {root_folder.name}",
+                        notification_type="success",
+                    )
+                except Exception:
+                    logger.warning("Failed to send scan notification")
         except Exception:
             logger.exception("Scan failed for root folder %s", root_folder_id)
             root_folder.scan_status = "error"

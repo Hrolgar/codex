@@ -413,6 +413,13 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
                 await db.commit()
                 await _broadcast_progress(dl)
                 logger.info("Torrent sent to qBittorrent: %s", dl.id)
+                try:
+                    from app.services.notification_service import notify
+                    book = await db.get(Book, dl.book_id) if dl.book_id else None
+                    dl_title = book.title if book else "torrent download"
+                    await notify(db, title="Download Complete", message=f"Download complete: {dl_title}", notification_type="success")
+                except Exception:
+                    logger.warning("Failed to send download notification")
                 return
             except Exception as exc:
                 logger.exception("qBittorrent failed for %s", dl.id)
@@ -441,6 +448,12 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
                 await db.commit()
                 await _broadcast_progress(dl)
                 logger.info("NZB sent to SABnzbd: %s", dl.id)
+                try:
+                    from app.services.notification_service import notify
+                    dl_title = book.title if book else "NZB download"
+                    await notify(db, title="Download Complete", message=f"Download complete: {dl_title}", notification_type="success")
+                except Exception:
+                    logger.warning("Failed to send download notification")
                 return
             except Exception as exc:
                 logger.exception("SABnzbd failed for %s", dl.id)
@@ -510,6 +523,20 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
         await db.commit()
         await _broadcast_progress(dl)
         logger.info("Download complete: %s -> %s", dl.id, organized_path)
+
+        # Send notification for completed download
+        try:
+            from app.services.notification_service import notify
+            book = await db.get(Book, dl.book_id) if dl.book_id else None
+            dl_title = book.title if book else organized_path.name
+            await notify(
+                db,
+                title="Download Complete",
+                message=f"Download complete: {dl_title}",
+                notification_type="success",
+            )
+        except Exception:
+            logger.warning("Failed to send download notification")
 
     except Exception as exc:
         logger.exception("Download failed for %s", dl.id)

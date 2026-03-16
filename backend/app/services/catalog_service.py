@@ -418,6 +418,19 @@ async def _refresh_via_hardcover(db: AsyncSession, author: Author) -> int:
     author.catalog_status = 'complete'
     await db.commit()
     logger.info('Hardcover catalog: added %d books for %s', added, author.name)
+
+    if added > 0:
+        try:
+            from app.services.notification_service import notify
+            await notify(
+                db,
+                title="Catalog Refresh",
+                message=f"Catalog refresh: {added} new books for {author.name}",
+                notification_type="info",
+            )
+        except Exception:
+            logger.warning("Failed to send catalog notification")
+
     return added
 
 
@@ -624,6 +637,18 @@ async def _refresh_via_openlibrary(db: AsyncSession, author: Author) -> int:
 
     author.catalog_status = "complete"
     await db.commit()
+
+    if added > 0:
+        try:
+            from app.services.notification_service import notify
+            await notify(
+                db,
+                title="Catalog Refresh",
+                message=f"Catalog refresh: {added} new books for {author.name}",
+                notification_type="info",
+            )
+        except Exception:
+            logger.warning("Failed to send catalog notification")
 
     # Try to enrich newly added books with full metadata
     try:
