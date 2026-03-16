@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session
 from app.models import Author, Book, BookAuthor, Series, SeriesBook
 from app.models.download import Download
+from app.models.library import LibraryItem
 from app.schemas.download import DownloadResponse
 from app.services.settings_service import get_setting
 from app.ws.manager import manager
@@ -265,6 +266,50 @@ async def _get_media_settings(db: AsyncSession, media_type: str, root_folder_id:
     return destination, path_template, use_hardlink
 
 
+async def _create_library_item(
+    db: AsyncSession, dl: Download, file_path: str,
+) -> None:
+    """Auto-create a LibraryItem after a download is organized."""
+    from app.models.root_folder import RootFolder
+
+    root_folder_id = dl.root_folder_id
+    if not root_folder_id:
+        book = await db.get(Book, dl.book_id) if dl.book_id else None
+        media_type = book.media_type if book else "ebook"
+        result = await db.execute(
+            select(RootFolder).where(
+                RootFolder.media_type == media_type,
+                RootFolder.default.is_(True),
+            ).limit(1)
+        )
+        rf = result.scalar_one_or_none()
+        if rf:
+            root_folder_id = rf.id
+
+    if not root_folder_id:
+        logger.warning(
+            "No root folder for download %s, skipping LibraryItem", dl.id,
+        )
+        return
+
+    p = Path(file_path)
+    try:
+        file_size = p.stat().st_size if p.exists() else None
+    except OSError:
+        file_size = None
+
+    item = LibraryItem(
+        library_id=root_folder_id,
+        book_id=dl.book_id,
+        file_path=file_path,
+        file_format=p.suffix.lstrip(".") or None,
+        file_size=file_size,
+        matched=dl.book_id is not None,
+    )
+    db.add(item)
+    logger.info("Created LibraryItem for download %s at %s", dl.id, file_path)
+
+
 async def _process_single(dl: Download, db: AsyncSession) -> None:
     """Download a single file with chunked streaming and progress updates."""
     from app.services.download_client_service import get_client_from_settings, QBittorrentClient, SABnzbdClient
@@ -288,6 +333,7 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
                 dl.status = "complete"
                 dl.progress = 1.0
                 dl.target_path = destination
+                await _create_library_item(db, dl, destination)
                 await db.commit()
                 await _broadcast_progress(dl)
                 logger.info("Torrent sent to qBittorrent: %s", dl.id)
@@ -313,6 +359,9 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
                 await client.add_nzb(dl.source_url, name=name)
                 dl.status = "complete"
                 dl.progress = 1.0
+                destination, _, _ = await _get_media_settings(db, book.media_type if book else "ebook", root_folder_id=dl.root_folder_id)
+                dl.target_path = destination
+                await _create_library_item(db, dl, destination)
                 await db.commit()
                 await _broadcast_progress(dl)
                 logger.info("NZB sent to SABnzbd: %s", dl.id)
@@ -381,6 +430,7 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
         dl.status = "complete"
         dl.progress = 1.0
         dl.target_path = str(organized_path)
+        await _create_library_item(db, dl, str(organized_path))
         await db.commit()
         await _broadcast_progress(dl)
         logger.info("Download complete: %s -> %s", dl.id, organized_path)
