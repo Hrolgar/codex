@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { searchExternal, createDownload, getRootFolders } from "@/api/client";
-import type { SearchResult, RootFolder } from "@/api/client";
+import type { SearchResult } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import { X, Download, Loader2, Search, ArrowDown, ArrowUp } from "lucide-react";
 
