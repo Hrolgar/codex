@@ -317,6 +317,7 @@ export interface DownloadCreate {
   source_type: string;
   book_id?: string;
   filename?: string;
+  root_folder_id?: string;
 }
 
 // Search & Download functions

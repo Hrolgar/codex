@@ -12,6 +12,7 @@ class DownloadCreate(BaseModel):
     source_type: str
     book_id: uuid.UUID | None = None
     filename: str | None = None
+    root_folder_id: uuid.UUID | None = None
 
 
 class DownloadResponse(BaseModel):
@@ -25,6 +26,7 @@ class DownloadResponse(BaseModel):
     progress: float
     error: str | None
     target_path: str | None
+    root_folder_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 

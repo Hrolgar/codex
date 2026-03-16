@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { searchExternal, createDownload } from "@/api/client";
-import type { SearchResult } from "@/api/client";
+import { searchExternal, createDownload, getRootFolders } from "@/api/client";
+import type { SearchResult, RootFolder } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import { X, Download, Loader2, Search, ArrowDown, ArrowUp } from "lucide-react";
 
@@ -51,6 +51,27 @@ export default function FindReleasesModal({
   const [sortKey, setSortKey] = useState<SortKey>("seeders");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [downloadingIdx, setDownloadingIdx] = useState<Set<number>>(new Set());
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("");
+
+  const { data: rootFolders } = useQuery({
+    queryKey: ["root-folders"],
+    queryFn: getRootFolders,
+    enabled: open,
+  });
+
+  const filteredFolders = useMemo(() => {
+    if (!rootFolders) return [];
+    if (!mediaType) return rootFolders;
+    return rootFolders.filter((f) => f.media_type === mediaType);
+  }, [rootFolders, mediaType]);
+
+  // Default to the folder marked as default for this media type
+  useEffect(() => {
+    if (filteredFolders.length > 0 && !selectedFolderId) {
+      const def = filteredFolders.find((f) => f.default);
+      setSelectedFolderId(def ? def.id : filteredFolders[0].id);
+    }
+  }, [filteredFolders, selectedFolderId]);
 
   const {
     data: results,
@@ -74,6 +95,7 @@ export default function FindReleasesModal({
       setFilter("");
       setSortKey("seeders");
       setSortDir("desc");
+      setSelectedFolderId("");
     }
   }, [open, defaultQuery]);
 
@@ -82,6 +104,7 @@ export default function FindReleasesModal({
       createDownload({
         source_url: result.download_url!,
         source_type: result.source ?? "unknown",
+        root_folder_id: selectedFolderId || undefined,
       }),
     onSuccess: () => addToast("Download started"),
     onError: () => addToast("Failed to start download", "error"),
@@ -224,6 +247,19 @@ export default function FindReleasesModal({
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-colors"
               />
             </div>
+            {filteredFolders.length > 0 && (
+              <select
+                value={selectedFolderId}
+                onChange={(e) => setSelectedFolderId(e.target.value)}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-colors"
+              >
+                {filteredFolders.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name || f.path}
+                  </option>
+                ))}
+              </select>
+            )}
             {results && (
               <span className="text-xs text-gray-500 whitespace-nowrap">
                 {filtered.length} of {results.length} results

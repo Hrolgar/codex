@@ -109,6 +109,7 @@ class DownloadService:
         source_type: str,
         book_id: uuid.UUID | None = None,
         target_filename: str | None = None,
+        root_folder_id: uuid.UUID | None = None,
     ) -> Download:
         dl = Download(
             source_type=source_type,
@@ -117,6 +118,7 @@ class DownloadService:
             status="pending",
             progress=0.0,
             target_path=target_filename,
+            root_folder_id=root_folder_id,
         )
         self.db.add(dl)
         await self.db.commit()
@@ -212,23 +214,32 @@ async def _get_book_context(db: AsyncSession, book_id: uuid.UUID):
     return book, ctx
 
 
-async def _get_media_settings(db: AsyncSession, media_type: str) -> tuple[str, str, bool]:
+async def _get_media_settings(db: AsyncSession, media_type: str, root_folder_id: uuid.UUID | None = None) -> tuple[str, str, bool]:
     """Get destination, path_template, and hardlink setting for a media type.
 
-    Looks up the default RootFolder for the media type first. Falls back to
-    the legacy downloads.*.destination settings if no root folder is configured.
+    If *root_folder_id* is provided, that folder is used directly. Otherwise
+    looks up the default RootFolder for the media type. Falls back to the
+    legacy downloads.*.destination settings if no root folder is configured.
     """
     from app.models.root_folder import RootFolder
     from app.services.path_template_service import DEFAULT_TEMPLATES
 
-    # Try root folder first
-    result = await db.execute(
-        select(RootFolder).where(
-            RootFolder.media_type == media_type,
-            RootFolder.default.is_(True),
-        ).limit(1)
-    )
-    root_folder = result.scalar_one_or_none()
+    root_folder = None
+    if root_folder_id:
+        result = await db.execute(
+            select(RootFolder).where(RootFolder.id == root_folder_id).limit(1)
+        )
+        root_folder = result.scalar_one_or_none()
+
+    # Fall back to the default root folder for this media type
+    if not root_folder:
+        result = await db.execute(
+            select(RootFolder).where(
+                RootFolder.media_type == media_type,
+                RootFolder.default.is_(True),
+            ).limit(1)
+        )
+        root_folder = result.scalar_one_or_none()
 
     media_key_map = {
         "ebook": "books",
@@ -272,7 +283,7 @@ async def _process_single(dl: Download, db: AsyncSession) -> None:
                 # Determine save path from settings
                 book = await db.get(Book, dl.book_id) if dl.book_id else None
                 media_type = book.media_type if book else "ebook"
-                destination, _, _ = await _get_media_settings(db, media_type)
+                destination, _, _ = await _get_media_settings(db, media_type, root_folder_id=dl.root_folder_id)
                 await client.add_torrent(dl.source_url, save_path=destination)
                 dl.status = "complete"
                 dl.progress = 1.0
@@ -401,7 +412,7 @@ async def _organize_file(
         return current_path
 
     # Get media-specific settings
-    destination, path_template, use_hardlink = await _get_media_settings(db, book.media_type)
+    destination, path_template, use_hardlink = await _get_media_settings(db, book.media_type, root_folder_id=dl.root_folder_id)
 
     # Set file format on context
     ctx.format = current_path.suffix.lstrip(".")
