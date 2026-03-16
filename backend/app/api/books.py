@@ -1,3 +1,5 @@
+import logging
+import shutil
 import uuid
 from pathlib import Path
 
@@ -7,16 +9,21 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Book, BookAuthor, Download, Edition, LibraryItem, SeriesBook
+from app.models import Author, Book, BookAuthor, Download, Edition, LibraryItem, Series, SeriesBook
 from app.models.root_folder import RootFolder
 from app.schemas import BookListItem, BookListResponse, BookResponse
 from app.services.library_service import LibraryService
+from app.services.path_template_service import DEFAULT_TEMPLATES, PathContext, render_path
+from app.services.settings_service import get_setting
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 class ManualMatchRequest(BaseModel):
     file_path: str
+    rename_folder: bool = False
 
 
 @router.get("/unmatched")
@@ -75,13 +82,111 @@ async def get_book(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return book
 
 
+async def _rename_to_template(
+    db: AsyncSession, book: Book, library_item: LibraryItem, root_folder: RootFolder,
+) -> str | None:
+    """Rename/move a file to match the path template. Returns new path or None."""
+    old_path = Path(library_item.file_path)
+    root_path = Path(root_folder.path).resolve()
+
+    # Build PathContext from book metadata
+    author_result = await db.execute(
+        select(Author.name)
+        .join(BookAuthor, Author.id == BookAuthor.author_id)
+        .where(BookAuthor.book_id == book.id)
+        .limit(1)
+    )
+    author_row = author_result.first()
+    author_name = author_row[0] if author_row else "Unknown"
+
+    series_result = await db.execute(
+        select(Series.name, SeriesBook.position)
+        .join(SeriesBook, Series.id == SeriesBook.series_id)
+        .where(SeriesBook.book_id == book.id)
+        .limit(1)
+    )
+    series_row = series_result.first()
+
+    ctx = PathContext(
+        author=author_name,
+        title=book.title,
+        series=series_row[0] if series_row else "",
+        series_position=str(series_row[1]) if series_row else "",
+        year=str(book.publish_year) if book.publish_year else "",
+        isbn=book.isbn_13 or book.isbn_10 or "",
+        language=book.language or "",
+        format=old_path.suffix.lstrip("."),
+        original_name=old_path.stem,
+    )
+
+    # Get path template for this media type
+    media_key_map = {"ebook": "books", "audiobook": "audiobooks", "comic": "comics"}
+    key = media_key_map.get(book.media_type, "books")
+    if key == "comics":
+        template = await get_setting(db, f"downloads.{key}.template")
+    else:
+        template = await get_setting(db, f"downloads.{key}.path_template")
+    if not template:
+        template = DEFAULT_TEMPLATES.get(book.media_type, DEFAULT_TEMPLATES["ebook"])
+
+    rendered = render_path(template, ctx)
+    if not rendered:
+        return None
+
+    # New path: root_folder / rendered_template + original extension
+    new_path = root_path / rendered
+    # Append the file extension if it's not a directory (single-file book)
+    if old_path.is_file():
+        new_path = new_path.with_suffix(old_path.suffix)
+
+    # Safety: ensure new path is still within the same root folder
+    try:
+        new_path.resolve().relative_to(root_path)
+    except ValueError:
+        logger.warning("Rename blocked: destination %s is outside root folder %s", new_path, root_path)
+        return None
+
+    # Don't rename if source and destination are the same
+    if old_path.resolve() == new_path.resolve():
+        return None
+
+    # Don't rename if destination already exists
+    if new_path.exists():
+        logger.warning("Rename skipped: destination already exists: %s", new_path)
+        return None
+
+    # Perform the rename
+    try:
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(old_path), str(new_path))
+        logger.info("Renamed file: %s -> %s", old_path, new_path)
+
+        # Clean up empty parent directories up to root
+        old_parent = old_path.parent
+        while old_parent != root_path and old_parent != old_parent.parent:
+            try:
+                old_parent.rmdir()  # Only removes if empty
+                logger.info("Removed empty directory: %s", old_parent)
+                old_parent = old_parent.parent
+            except OSError:
+                break
+
+        return str(new_path)
+    except OSError as exc:
+        logger.error("Failed to rename %s -> %s: %s", old_path, new_path, exc)
+        return None
+
+
 @router.post("/{book_id}/match")
 async def manual_match(
     book_id: uuid.UUID,
     body: ManualMatchRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Manually match an existing file to a book by creating a LibraryItem link."""
+    """Manually match an existing file to a book by creating a LibraryItem link.
+
+    If rename_folder=True, also renames the file to match the configured path template.
+    """
     book = await db.get(Book, book_id)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -104,44 +209,56 @@ async def manual_match(
             detail=f"File is already linked to another book (book_id={existing_item.book_id})",
         )
 
+    # Find the root folder this file belongs to
+    rf_stmt = select(RootFolder).order_by(RootFolder.created_at)
+    rf_result = await db.execute(rf_stmt)
+    root_folders = rf_result.scalars().all()
+
+    root_folder = None
+    real_file = str(file_path.resolve())
+    for rf in root_folders:
+        real_root = str(Path(rf.path).resolve())
+        if real_file.startswith(real_root + "/") or real_file == real_root:
+            root_folder = rf
+            break
+
+    if not root_folder:
+        raise HTTPException(
+            status_code=400,
+            detail="File is not inside any configured root folder",
+        )
+
+    renamed_path = None
+
     if existing_item:
         # Update the existing unmatched LibraryItem to point to this book
         existing_item.book_id = book_id
         existing_item.matched = True
+
+        # Optionally rename the file to match the path template
+        if body.rename_folder:
+            renamed_path = await _rename_to_template(db, book, existing_item, root_folder)
+            if renamed_path:
+                existing_item.file_path = renamed_path
+
         await db.commit()
         return {
             "status": "matched",
             "library_item_id": str(existing_item.id),
             "book_id": str(book_id),
             "manual_match": True,
+            "renamed": renamed_path is not None,
+            "file_path": existing_item.file_path,
         }
 
-    # No existing LibraryItem — find the root folder this file belongs to
-    rf_stmt = select(RootFolder).order_by(RootFolder.created_at)
-    rf_result = await db.execute(rf_stmt)
-    root_folders = rf_result.scalars().all()
-
-    library_id = None
-    real_file = str(file_path.resolve())
-    for rf in root_folders:
-        real_root = str(Path(rf.path).resolve())
-        if real_file.startswith(real_root + "/") or real_file == real_root:
-            library_id = rf.id
-            break
-
-    if not library_id:
-        raise HTTPException(
-            status_code=400,
-            detail="File is not inside any configured root folder",
-        )
-
+    # No existing LibraryItem — create one
     try:
         file_size = file_path.stat().st_size
     except OSError:
         file_size = None
 
     item = LibraryItem(
-        library_id=library_id,
+        library_id=root_folder.id,
         book_id=book_id,
         file_path=body.file_path,
         file_format=file_path.suffix.lstrip(".") or None,
@@ -149,6 +266,15 @@ async def manual_match(
         matched=True,
     )
     db.add(item)
+
+    # Optionally rename the file to match the path template
+    if body.rename_folder:
+        # Flush to get the item persisted before rename
+        await db.flush()
+        renamed_path = await _rename_to_template(db, book, item, root_folder)
+        if renamed_path:
+            item.file_path = renamed_path
+
     await db.commit()
     await db.refresh(item)
 
@@ -157,6 +283,8 @@ async def manual_match(
         "library_item_id": str(item.id),
         "book_id": str(book_id),
         "manual_match": True,
+        "renamed": renamed_path is not None,
+        "file_path": item.file_path,
     }
 
 
