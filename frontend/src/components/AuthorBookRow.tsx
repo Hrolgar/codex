@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toggleBookMonitored } from '@/api/client';
-import { Eye, EyeOff, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { Eye, EyeOff, Search, ChevronDown, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
 
 interface BookEdition {
   language: string;
@@ -46,13 +46,15 @@ export default function AuthorBookRow({ book, authorName, onSearch }: Props) {
   });
 
   const status = book.owned
-    ? { label: 'Owned', color: 'text-green-400' }
+    ? { label: 'Owned', color: 'text-green-400', icon: <CheckCircle2 size={14} className="text-green-400" /> }
     : !book.monitored
-      ? { label: 'Not Monitored', color: 'text-gray-500' }
-      : { label: 'Missing', color: 'text-yellow-400' };
+      ? { label: 'Not Monitored', color: 'text-gray-500', icon: null }
+      : { label: 'Missing', color: 'text-yellow-400', icon: <XCircle size={14} className="text-yellow-400" /> };
+
+  const dimmed = !book.monitored;
 
   return (
-    <div className='border-b border-gray-800/50 last:border-0'>
+    <div className={`border-b border-gray-800/50 last:border-0 ${dimmed ? 'opacity-45' : ''}`}>
       <div className='flex items-center gap-3 px-4 py-3 hover:bg-gray-800/30 transition-colors'>
         {/* Expand toggle */}
         <button onClick={() => setExpanded(!expanded)} className='text-gray-600 hover:text-gray-400 shrink-0'>
@@ -75,7 +77,7 @@ export default function AuthorBookRow({ book, authorName, onSearch }: Props) {
         </div>
 
         <span className={'text-[10px] font-medium px-1.5 py-0.5 rounded ' + badge.color}>{badge.label}</span>
-        <span className={'text-xs font-medium ' + status.color}>{status.label}</span>
+        <span className={'text-xs font-medium flex items-center gap-1 ' + status.color}>{status.icon}{status.label}</span>
 
         {/* Monitor toggle */}
         <button

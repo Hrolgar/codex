@@ -16,6 +16,8 @@ import {
   EyeOff,
   Loader2,
   AlertCircle,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 const MEDIA_LABELS: Record<string, string> = {
@@ -153,7 +155,7 @@ export default function AuthorDetailPage() {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 <RefreshCw size={14} className={refreshMutation.isPending ? "animate-spin" : ""} />
-                Refresh
+                Refresh Catalog
               </button>
               {showDeleteConfirm ? (
                 <div className="flex items-center gap-2">
@@ -189,9 +191,9 @@ export default function AuthorDetailPage() {
           <div className="flex items-center gap-3 mt-3 text-sm">
             <span className="text-gray-300"><span className="font-semibold text-gray-100">{totalBooks}</span> total</span>
             <span className="text-gray-600">&middot;</span>
-            <span className="text-green-400"><span className="font-semibold">{ownedBooks}</span> owned</span>
+            <span className="text-green-400"><CheckCircle2 size={13} className="inline -mt-0.5 mr-0.5" /><span className="font-semibold">{ownedBooks}</span> owned</span>
             <span className="text-gray-600">&middot;</span>
-            <span className="text-yellow-400"><span className="font-semibold">{missingBooks}</span> missing</span>
+            <span className="text-yellow-400"><XCircle size={13} className="inline -mt-0.5 mr-0.5" /><span className="font-semibold">{missingBooks}</span> missing</span>
             {notMonitored > 0 && (
               <>
                 <span className="text-gray-600">&middot;</span>
@@ -199,6 +201,21 @@ export default function AuthorDetailPage() {
               </>
             )}
           </div>
+
+          {/* Ownership progress bar */}
+          {totalBooks > 0 && (
+            <div className="mt-2">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${ownedBooks === totalBooks ? "bg-green-500" : "bg-indigo-500"}`}
+                    style={{ width: `${Math.round((ownedBooks / totalBooks) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-400 shrink-0">{ownedBooks} of {totalBooks} owned</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -339,7 +356,7 @@ function SeriesSection({
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-300">{seriesName}</h3>
+        <Link to={`/series/${seriesId}`} className="text-sm font-semibold text-gray-300 hover:text-indigo-400 transition-colors">{seriesName}</Link>
         <div className="flex items-center gap-2">
           <div className="w-20 h-1.5 bg-gray-800 rounded-full overflow-hidden">
             <div className={`h-full rounded-full ${pct === 100 ? "bg-green-500" : "bg-indigo-500"}`} style={{ width: `${pct}%` }} />
